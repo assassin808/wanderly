@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest a focused improvement to the capture-to-clarity loop
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What user problem does this solve?
+      placeholder: When I capture..., I cannot...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would a small first version look like?
+    validations:
+      required: true
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Product principles
+      options:
+        - label: This keeps capture low-friction.
+        - label: This keeps the user in control of their thinking.
+        - label: This does not require putting provider secrets in the browser.
