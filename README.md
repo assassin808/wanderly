@@ -4,6 +4,8 @@
 
 Wanderly helps you capture a thought before it disappears, then lets an AI ask a few useful questions when you have time. An idea can slowly move from a fragment to an **Abstract** or a **Proposal**. Dreaming is intentionally secondary: it connects distant fragments into new combinations without turning the product into another productivity dashboard.
 
+![Wanderly dashboard](docs-wanderly-screenshot.png)
+
 ## Product principles
 
 - Capture must take seconds.
