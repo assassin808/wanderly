@@ -29,6 +29,8 @@ Open `index.html` directly to try the UI. The current UI uses seeded local data 
 
 The product should use an application-owned `/api/ai` proxy, not call model providers directly from the browser. The proxy can route to OpenAI, Anthropic, Google, Azure OpenAI, Ollama, or any OpenAI-compatible endpoint.
 
+The experimental UI also supports user-owned keys for OpenAI, Claude, Gemini, and OpenRouter. Keys stay in the current browser's local storage and are sent directly to the selected provider. Use this only on a trusted device; production deployments should move provider calls behind a server-side proxy.
+
 The client contract is deliberately small:
 
 ```json
