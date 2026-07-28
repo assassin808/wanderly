@@ -22,8 +22,13 @@ Wanderly helps you capture a thought before it disappears, then lets an AI ask a
 - Dreaming space for connecting fragments
 - Local persistence with `localStorage`
 - User-input escaping to prevent HTML injection
+- Folder-style Markdown export/import for local-first storage
 
 Open `index.html` directly to try the UI. The current UI uses seeded local data and is intentionally dependency-free.
+
+## Local files and Vercel
+
+Vercel hosts the static app; user content stays local. Use **导出文件** to download Markdown files plus a JSON backup, and **导入文件夹** to restore `.md`, `.txt`, or `.json` files. This keeps the deployment simple and avoids storing personal ideas on a server.
 
 ## AI integration direction
 
