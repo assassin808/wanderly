@@ -74,7 +74,6 @@ struct EntryConversation: View {
     @Bindable var entry: Entry
     @Environment(\.modelContext) private var context
     @State private var draft = ""
-    @State private var showOriginal = false
     @State private var showSettings = false
     @FocusState private var inputFocused: Bool
 
@@ -109,21 +108,11 @@ struct EntryConversation: View {
                     .accessibilityIdentifier("entrySettings")
                 }
 
-                Section {
-                    DisclosureGroup(isExpanded: $showOriginal) {
-                        TextField("原文", text: $entry.text, axis: .vertical)
-                            .lineLimit(2...20)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("原文")
-                            if !showOriginal {
-                                Text(entry.text)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            }
-                        }
-                    }
+                // 自己记下的原文一直显示，不用点开。
+                Section("原文") {
+                    TextField("原文", text: $entry.text, axis: .vertical)
+                        .lineLimit(2...20)
+                        .accessibilityIdentifier("originalField")
                 }
 
                 // 旧版本把补充内容存在 details 和 nextStep 里，有内容才显示，AI 和导出也会带上。

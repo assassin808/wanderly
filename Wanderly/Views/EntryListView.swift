@@ -173,6 +173,14 @@ struct EntryRow: View {
                         .accessibilityIdentifier("entry:\(entry.firstLine)")
                 }
 
+                // AI 换了标题时，下面仍然显示自己记下的原文。
+                if entry.text.trimmed != entry.title {
+                    Text(entry.text)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
                 HStack(spacing: 8) {
                     if let dueLabel = entry.dueLabel {
                         Label(dueLabel, systemImage: entry.hasTime ? "clock" : "calendar")

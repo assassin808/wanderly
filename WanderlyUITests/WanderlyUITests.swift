@@ -38,6 +38,21 @@ final class WanderlyUITests: XCTestCase {
         XCTAssertTrue(app.buttons["完善 2"].waitForExistence(timeout: 5))
     }
 
+    /// 回归：AI 换了标题之后，列表和详情都要能看到自己记下的原文。
+    func testOriginalTextStaysVisible() {
+        let app = launch(["-demo", "-skipNotificationPrompt"])
+
+        let aiTitle = app.staticTexts["回房东邮件：暖气"]
+        XCTAssertTrue(aiTitle.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["回房东邮件 暖气坏了"].exists, "列表里应该同时能看到原文")
+
+        aiTitle.tap()
+        let original = element("originalField", in: app)
+        XCTAssertTrue(original.waitForExistence(timeout: 5))
+        XCTAssertTrue(original.isHittable, "详情里的原文不用点开就能看到")
+        attachScreenshot(app, name: "Original text visible")
+    }
+
     func testDetectsTimeWhileTyping() throws {
         let app = launch(["-demo", "-skipNotificationPrompt"])
 
