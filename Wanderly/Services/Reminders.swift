@@ -78,13 +78,20 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// 有待办时，测试通知带上「完成 / 推迟到明天」按钮，作用在最早到期的那一条上。
     func sendTest() async {
         await requestAuthorizationIfNeeded()
         let content = UNMutableNotificationContent()
         content.title = "Wanderly"
         content.body = "提醒可以正常收到。"
         content.sound = .default
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
+        if let entry = earliestActiveEntry() {
+            content.title = "测试：做完了吗？"
+            content.body = "提醒可以正常收到。长按可以直接处理：\(entry.title)"
+            content.categoryIdentifier = Category.entry
+            content.userInfo = ["entryID": entry.id.uuidString]
+        }
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
         try? await center.add(UNNotificationRequest(identifier: "test-\(UUID().uuidString)", content: content, trigger: trigger))
     }
 
@@ -158,6 +165,16 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
 
     private func entry(with id: UUID) -> Entry? {
         var descriptor = FetchDescriptor<Entry>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return try? Persistence.container.mainContext.fetch(descriptor).first
+    }
+
+    private func earliestActiveEntry() -> Entry? {
+        let rough = EntryState.rough.rawValue
+        let open = EntryState.open.rawValue
+        var descriptor = FetchDescriptor<Entry>(
+            predicate: #Predicate { $0.stateRaw == rough || $0.stateRaw == open },
+            sortBy: [SortDescriptor(\.due)])
         descriptor.fetchLimit = 1
         return try? Persistence.container.mainContext.fetch(descriptor).first
     }
