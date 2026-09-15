@@ -1,0 +1,55 @@
+name: Wanderly
+options:
+  bundleIdPrefix: io.github.assassin808
+  developmentLanguage: zh-Hans
+  createIntermediateGroups: true
+packages:
+  WanderlyCore:
+    path: WanderlyCore
+settings:
+  base:
+    DEVELOPMENT_TEAM: ZS2UVBACK8
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "2.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+targets:
+  Wanderly:
+    type: application
+    platform: auto
+    supportedDestinations: [iOS, macOS]
+    deploymentTarget:
+      iOS: "18.0"
+      macOS: "15.0"
+    sources:
+      - path: Wanderly
+    dependencies:
+      - package: WanderlyCore
+    info:
+      path: Wanderly/Info.plist
+      properties:
+        CFBundleDisplayName: Wanderly
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.productivity
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UIBackgroundModes: [remote-notification]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_NAME: Wanderly
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.assassin808.wanderly
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: Wanderly/Wanderly.entitlements
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Wanderly/Wanderly-macOS.entitlements

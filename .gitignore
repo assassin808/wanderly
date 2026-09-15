@@ -3,3 +3,12 @@
 .env.*
 node_modules/
 dist/
+
+# Xcode（工程由 project.yml 通过 xcodegen 生成）
+Wanderly.xcodeproj/
+Wanderly/Info.plist
+build/
+DerivedData/
+xcuserdata/
+.build/
+.swiftpm/

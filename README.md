@@ -1,56 +1,51 @@
 # Wanderly
 
-> A quiet place for unfinished ideas.
+> Write it down now, flesh it out tonight, finish it on time.
 
-Wanderly helps you capture a thought before it disappears, then lets an AI ask a few useful questions when you have time. An idea can slowly move from a fragment to an **Abstract** or a **Proposal**. Dreaming is intentionally secondary: it connects distant fragments into new combinations without turning the product into another productivity dashboard.
+Wanderly is a small native app for iPhone and Mac for the irregular things in a day: a meeting, an idea, something important that isn't urgent yet. Type a few words and pick a deadline. In the evening Wanderly reminds you to flesh the note out, and after the deadline it asks whether you did it.
 
-![Wanderly dashboard](docs-wanderly-screenshot.png)
+![Wanderly on iPhone](docs/screenshot-ios.png)
 
-## Product principles
+## How it works
 
-- Capture must take seconds.
-- The AI asks, it does not write over the user's thinking.
-- Questions should expose missing context, not create busywork.
-- An idea can stay ambiguous until the user is ready.
-- Local-first by default; no API key belongs in the browser.
+**Capture.** One line plus a deadline chip: today, tomorrow, this weekend, next weekend, or a specific date and time. You can also capture with Siri or Shortcuts ("用 Wanderly 记一件事") or from the Mac menu bar.
 
-## Current MVP
+**Refine.** Every evening (21:30 by default) a notification tells you how many quick notes are still waiting. The refine view shows one note at a time, where you can add details, a next step, and a deadline. If you want, Claude can ask one to three questions about what's missing. It only asks; your answers go into the note.
 
-- Dashboard with a low-friction capture box
-- Idea garden with seed / growing / bloom states
-- Wandering fragments and one-click promotion to an Idea
-- Dreaming space for connecting fragments
-- Local persistence with `localStorage`
-- User-input escaping to prevent HTML injection
-- Folder-style Markdown export/import for local-first storage
+**Finish.**
+- A morning notification lists what's due today.
+- Notes with a time go off at that time.
+- After a note's deadline passes, a "做完了吗？" notification offers 完成 and 推迟到明天.
+- If a note is still overdue, you get asked again the next evening.
+- On Sunday evening, notes due later than a week out show up for a quick review.
 
-Open `index.html` directly to try the UI. The current UI uses seeded local data and is intentionally dependency-free.
+**Sync.** Notes sync between devices through iCloud (a CloudKit private database). There's no server and no account to create.
 
-## Local files and Vercel
+## Project layout
 
-Vercel hosts the static app; user content stays local. Use **导出文件** to download Markdown files plus a JSON backup, and **导入文件夹** to restore `.md`, `.txt`, or `.json` files. This keeps the deployment simple and avoids storing personal ideas on a server.
+| Path | What |
+| --- | --- |
+| `project.yml` | XcodeGen spec: one multiplatform target (iOS 18, macOS 15) |
+| `Wanderly/` | SwiftUI app: SwiftData model, notifications, views, App Intent |
+| `WanderlyCore/` | Swift package with the pure logic: deadline math, reminder planning, Claude request/response |
 
-## AI integration direction
+## Build
 
-The product should use an application-owned `/api/ai` proxy, not call model providers directly from the browser. The proxy can route to OpenAI, Anthropic, Google, Azure OpenAI, Ollama, or any OpenAI-compatible endpoint.
-
-The experimental UI also supports user-owned keys for OpenAI, Claude, Gemini, and OpenRouter. Keys stay in the current browser's local storage and are sent directly to the selected provider. Use this only on a trusted device; production deployments should move provider calls behind a server-side proxy.
-
-The client contract is deliberately small:
-
-```json
-{
-  "mode": "ask_questions",
-  "idea": { "title": "...", "body": "...", "stage": "seed" },
-  "answers": []
-}
+```sh
+brew install xcodegen
+xcodegen generate
+open Wanderly.xcodeproj
 ```
 
-The response should return 1–3 questions plus an optional stage recommendation. See `src/llm.js` for the provider-neutral contract and `CLAUDE.md` for the refinement skill draft.
+Run the logic tests with `cd WanderlyCore && swift test`. Launch with the `-demo` argument to use an in-memory store filled with sample notes.
 
-## Contributing
+## AI questions
 
-Start with a small issue. Good contributions include better question quality, import/export, a local model adapter, accessibility fixes, and experiments for Dreaming. Please read [CONTRIBUTING.md](CONTRIBUTING.md).
+Add a Claude API key in Settings. It's stored in the Keychain and syncs to your other devices through iCloud Keychain. Requests go straight from the device to the Anthropic API: `claude-opus-5` at low effort, with structured JSON output and server-side refusal fallback. The prompt is in `WanderlyCore/Sources/WanderlyCore/ClaudeRefiner.swift`.
+
+## History
+
+The earlier web prototype (idea garden, wandering fragments, Dreaming) is still in the git history before the native rewrite.
 
 ## License
 
