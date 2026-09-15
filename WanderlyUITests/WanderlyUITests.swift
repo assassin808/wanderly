@@ -14,24 +14,26 @@ final class WanderlyUITests: XCTestCase {
         return app
     }
 
+    /// 多行输入框在 UIKit 里是 text view，按 identifier 找不区分类型。
+    private func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
     func testCaptureThenComplete() {
         let app = launch(["-demo", "-skipNotificationPrompt"])
 
-        let field = app.textFields["captureField"]
+        let field = element("captureField", in: app)
         XCTAssertTrue(field.waitForExistence(timeout: 15))
         field.tap()
-        field.typeText("UI 测试速记\n")
+        field.typeText("UI 测试速记")
+        app.buttons["captureSave"].tap()
 
         let row = app.staticTexts["UI 测试速记"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
-        // 示例数据里有 2 条速记，新记的一条也待完善。
+        // 示例数据里有 2 条待完善，新记的一条也待完善。
         XCTAssertTrue(app.buttons["完善 3"].waitForExistence(timeout: 5))
 
-        // 记完后输入框保持聚焦方便连续记；键盘会挡住下面的行，先收起来。
-        app.keyboards.buttons["Done"].tap()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
         app.buttons["完成：UI 测试速记"].tap()
-
         XCTAssertTrue(row.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.buttons["完善 2"].waitForExistence(timeout: 5))
     }
@@ -39,7 +41,7 @@ final class WanderlyUITests: XCTestCase {
     func testDetectsTimeWhileTyping() throws {
         let app = launch(["-demo", "-skipNotificationPrompt"])
 
-        let field = app.textFields["captureField"]
+        let field = element("captureField", in: app)
         XCTAssertTrue(field.waitForExistence(timeout: 15))
         field.tap()
         let text = "周五下午三点和导师聊 eval"
@@ -49,15 +51,41 @@ final class WanderlyUITests: XCTestCase {
         let label = DueText.describe(due: detected.date, hasTime: detected.hasTime, now: .now)
         XCTAssertTrue(app.buttons["识别到 \(label)"].waitForExistence(timeout: 5))
 
-        field.typeText("\n")
-        app.keyboards.buttons["Done"].tap()
+        app.buttons["captureSave"].tap()
         XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts[label].exists, "新记的事应该带着识别到的时间")
     }
 
+    /// 回归：以前 AI 追问的内容一离开页面或切到后台就没了。
+    func testConversationSurvivesClosingAndBackground() {
+        let app = launch(["-demo", "-skipNotificationPrompt"])
+
+        let row = app.staticTexts["回房东邮件：暖气"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        row.tap()
+        XCTAssertTrue(element("aiMessage", in: app).waitForExistence(timeout: 5), "AI 的追问应该在对话里")
+
+        let input = element("chatField", in: app)
+        input.tap()
+        input.typeText("上周三开始坏的，希望周末前修好")
+        app.buttons["chatSend"].tap()
+        let reply = app.staticTexts["上周三开始坏的，希望周末前修好"]
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+
+        app.buttons["好"].tap()
+        XCUIDevice.shared.press(.home)
+        app.activate()
+
+        // 回复之后就算完善了，待完善从 2 条变成 1 条。
+        XCTAssertTrue(app.buttons["完善 1"].waitForExistence(timeout: 10))
+        app.staticTexts["回房东邮件：暖气"].tap()
+        XCTAssertTrue(reply.waitForExistence(timeout: 5), "关掉再打开后，对话应该还在")
+        XCTAssertTrue(element("aiMessage", in: app).exists)
+    }
+
     func testCaptureLinkFocusesInput() {
         let app = launch(["-demo", "-skipNotificationPrompt"])
-        XCTAssertTrue(app.textFields["captureField"].waitForExistence(timeout: 15))
+        XCTAssertTrue(element("captureField", in: app).waitForExistence(timeout: 15))
         XCTAssertFalse(app.keyboards.firstMatch.exists)
 
         app.open(URL(string: "wanderly://capture")!)
@@ -98,7 +126,8 @@ final class WanderlyUITests: XCTestCase {
         settings.tap()
 
         // 设置页会重排，然后列出接下来的提醒。
-        let planned = app.staticTexts.matching(NSPredicate(format: "label IN {'晚间整理', '做完了吗？'} OR label BEGINSWITH '今天有'")).firstMatch
+        let planned = app.staticTexts.matching(NSPredicate(format:
+            "label BEGINSWITH '去完善' OR label BEGINSWITH '有 ' OR label BEGINSWITH '今天有' OR label IN {'做完了吗？', '还在进行吗？'}")).firstMatch
         XCTAssertTrue(planned.waitForExistence(timeout: 10), "设置页没有列出排好的提醒")
 
         app.buttons["发一条测试通知"].tap()
@@ -109,34 +138,44 @@ final class WanderlyUITests: XCTestCase {
     }
 
     /// 需要编译时注入了 Gemini Key，并用 TEST_RUNNER_WANDERLY_LIVE_AI=1 运行。
-    func testAIQuestions() throws {
+    func testAIOrganizesInBackgroundAndChats() throws {
         guard ProcessInfo.processInfo.environment["WANDERLY_LIVE_AI"] == "1" else {
             throw XCTSkip("设置 TEST_RUNNER_WANDERLY_LIVE_AI=1 才会真的调用 AI")
         }
-        let app = launch(["-demo", "-skipNotificationPrompt"])
+        let app = launch(["-demo", "-skipNotificationPrompt", "-demoAI"])
 
-        let row = app.staticTexts["回房东邮件 暖气"]
-        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        let field = element("captureField", in: app)
+        XCTAssertTrue(field.waitForExistence(timeout: 15))
+        field.tap()
+        let text = "想做一个让 agent 自己出 eval 题再自己打分的实验，看看它能不能发现自己的弱点"
+        field.typeText(text)
+        app.buttons["captureSave"].tap()
+
+        // AI 可能很快就把标题换掉，所以按原文生成的固定标识找这一行；问题整理好会直接出现在对话里。
+        let row = app.staticTexts["entry:\(text)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
+        XCTAssertTrue(element("aiMessage", in: app).waitForExistence(timeout: 90), "AI 没有在后台整理出问题")
+        attachScreenshot(app, name: "AI organized")
 
-        let ask = app.buttons["askAIButton"]
-        for _ in 0..<5 where !(ask.exists && ask.isHittable) {
-            app.swipeUp()
-        }
-        XCTAssertTrue(ask.isHittable)
-        ask.tap()
+        let input = element("chatField", in: app)
+        input.tap()
+        input.typeText("主要想验证它能不能找出自己在长程规划上的问题")
+        app.buttons["chatSend"].tap()
 
-        // 问题回来后按钮会被问题列表替换；出错的话按钮会留着并显示错误。
-        XCTAssertTrue(ask.waitForNonExistence(timeout: 60), "AI 没有返回问题")
-        let questions = XCTAttachment(screenshot: app.screenshot())
-        questions.name = "AI questions"
-        questions.lifetime = .keepAlways
-        add(questions)
+        // 对话会滚到底部，列表只渲染看得见的行，所以不数消息条数，而是等一条不带「AI 追问」标记的回复出现。
+        // 免费额度经常繁忙，App 会自动换模型、隔几秒重试，所以多等一会儿。
+        let reply = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == 'aiMessage' AND NOT (label BEGINSWITH 'AI 追问')"))
+            .firstMatch
+        XCTAssertTrue(reply.waitForExistence(timeout: 240), "AI 没有回复")
+        attachScreenshot(app, name: "AI replied")
+    }
 
-        let again = app.buttons["换一组问题"]
-        for _ in 0..<3 where !again.exists {
-            app.swipeUp()
-        }
-        XCTAssertTrue(again.exists)
+    private func attachScreenshot(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

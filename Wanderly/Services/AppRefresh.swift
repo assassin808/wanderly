@@ -3,7 +3,7 @@ import Foundation
 import BackgroundTasks
 #endif
 
-/// 导入分享收件箱并重排提醒。App 回到前台、iOS 后台刷新、Mac 定时任务都会调用。
+/// 导入分享收件箱、重排提醒、让 AI 处理积压的事。App 回到前台、iOS 后台刷新、Mac 定时任务都会调用。
 enum AppRefresh {
     static let taskIdentifier = "io.github.assassin808.wanderly.refresh"
 
@@ -12,6 +12,9 @@ enum AppRefresh {
             EntryActions.importInbox(into: Persistence.container.mainContext)
         }
         await Reminders.shared.reschedule()
+        await AIWorker.shared.processPending()
+        await AIWorker.shared.waterIdeas()
+        await AIWorker.shared.wander()
     }
 
     #if os(iOS)
@@ -28,7 +31,7 @@ enum AppRefresh {
     #if os(macOS)
     private static var scheduler: NSBackgroundActivityScheduler?
 
-    /// Mac 上 App 常驻菜单栏，每隔几小时重排一次。
+    /// Mac 上 App 常驻菜单栏，每隔几小时处理一次。
     static func startPeriodicRefresh() {
         let activity = NSBackgroundActivityScheduler(identifier: taskIdentifier)
         activity.repeats = true

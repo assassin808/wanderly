@@ -6,18 +6,19 @@ struct SettingsView: View {
     @AppStorage(Preferences.Key.remindersOn) private var remindersOn = true
     @AppStorage(Preferences.Key.morningMinute) private var morningMinute = ReminderSettings.default.morningMinute
     @AppStorage(Preferences.Key.eveningMinute) private var eveningMinute = ReminderSettings.default.eveningMinute
-    @AppStorage(Preferences.Key.reviewWeekday) private var reviewWeekday = ReminderSettings.default.reviewWeekday
+    @AppStorage(Preferences.Key.firstNudgeMinutes) private var firstNudgeMinutes = ReminderSettings.default.firstNudgeMinutes
     @AppStorage(Preferences.Key.checkDelayMinutes) private var checkDelayMinutes = ReminderSettings.default.checkDelayMinutes
     @AppStorage(Preferences.Key.aiProvider) private var provider: AIProvider = .gemini
+    @AppStorage(Preferences.Key.betaIdeas) private var betaIdeas = false
+    @AppStorage(Preferences.Key.waterIntervalDays) private var waterIntervalDays = 3
     @State private var apiKey = ""
     @State private var notificationsDenied = false
     @State private var upcoming: [UpcomingReminder] = []
-
-    private let weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+    @State private var wanderMessage: String?
 
     /// 任一提醒设置变化都会重排并刷新列表。
     private var reminderSignature: [Int] {
-        [remindersOn ? 1 : 0, morningMinute, eveningMinute, reviewWeekday, checkDelayMinutes]
+        [remindersOn ? 1 : 0, morningMinute, eveningMinute, firstNudgeMinutes, checkDelayMinutes]
     }
 
     var body: some View {
@@ -81,21 +82,25 @@ struct SettingsView: View {
                 }
             }
 
-            Section("提醒时间") {
-                DatePicker("早上：今天到期的事", selection: minutes($morningMinute), displayedComponents: .hourAndMinute)
-                DatePicker("晚上：完善速记、确认做完", selection: minutes($eveningMinute), displayedComponents: .hourAndMinute)
-                Picker("周回顾", selection: $reviewWeekday) {
-                    Text("关闭").tag(0)
-                    ForEach(1...7, id: \.self) { day in
-                        Text(weekdays[day - 1] + "晚上").tag(day)
-                    }
+            Section {
+                Picker("记下后多久提醒完善", selection: $firstNudgeMinutes) {
+                    Text("1 小时").tag(60)
+                    Text("2 小时").tag(120)
+                    Text("3 小时").tag(180)
+                    Text("4 小时").tag(240)
                 }
+                DatePicker("早上：到期的事、还在进行吗", selection: minutes($morningMinute), displayedComponents: .hourAndMinute)
+                DatePicker("晚上：定期提醒完善", selection: minutes($eveningMinute), displayedComponents: .hourAndMinute)
                 Picker("有具体时间的事，过多久问做完没", selection: $checkDelayMinutes) {
                     Text("30 分钟").tag(30)
                     Text("1 小时").tag(60)
                     Text("2 小时").tag(120)
                     Text("4 小时").tag(240)
                 }
+            } header: {
+                Text("提醒节奏")
+            } footer: {
+                Text("紧急的每天提醒，这几天的每 2 天，不急的每周；只记录的不提醒。晚上 10 点以后不打扰。")
             }
 
             Section {
@@ -112,9 +117,44 @@ struct SettingsView: View {
                     Link("在 Anthropic Console 创建 Key", destination: URL(string: "https://console.anthropic.com/settings/keys")!)
                 }
             } header: {
-                Text("AI 追问")
+                Text("AI")
             } footer: {
                 Text(keyFooter)
+            }
+
+            Section {
+                Toggle("Idea 生长", isOn: $betaIdeas)
+                if betaIdeas {
+                    Picker("想法放多久没动就浇水", selection: $waterIntervalDays) {
+                        Text("3 天").tag(3)
+                        Text("5 天").tag(5)
+                        Text("7 天").tag(7)
+                    }
+                    Button {
+                        Task {
+                            wanderMessage = nil
+                            wanderMessage = await AIWorker.shared.wander(force: true) ?? "漫游完成，结果在列表最上面。"
+                        }
+                    } label: {
+                        HStack {
+                            Text("现在漫游一次")
+                            if AIWorker.shared.wandering {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(AIWorker.shared.wandering)
+                    if let wanderMessage {
+                        Text(wanderMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Beta")
+            } footer: {
+                Text("漫游：每周把几个想法放在一起，找找可能的联系，由你决定采纳还是删掉。浇水：想法放久了，AI 会再问一个新问题。")
             }
         }
         .formStyle(.grouped)

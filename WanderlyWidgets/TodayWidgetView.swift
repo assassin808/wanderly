@@ -130,7 +130,7 @@ struct TodayWidgetView: View {
                     .font(.caption)
             }
             ForEach(focus.items) { item in
-                Text("\(DueText.describe(due: item.due, hasTime: item.hasTime, now: date)) \(item.title)")
+                Text("\(item.caption(now: date)) \(item.title)")
                     .font(.caption)
                     .lineLimit(1)
             }
@@ -159,20 +159,20 @@ struct TodayWidgetView: View {
         if let first = focus.items.first, focus.urgentCount > 0 {
             Text("今天 \(focus.urgentCount) 件 · \(first.title)")
         } else {
-            Text("Wanderly：今天没有到期的事")
+            Text("Wanderly：今天没有要紧的事")
         }
     }
     #endif
 
     private func row(_ item: WidgetSnapshot.Item, compact: Bool) -> some View {
-        let overdue = DueText.isOverdue(due: item.due, hasTime: item.hasTime, now: date)
+        let overdue = item.hasDue && DueText.isOverdue(due: item.due, hasTime: item.hasTime, now: date)
         return VStack(alignment: .leading, spacing: 1) {
             // 用具体颜色：外层 Link 的强调色会盖掉层级样式 .primary，标题会变成蓝色。
             Text(item.title)
                 .font(compact ? .caption.weight(.medium) : .subheadline)
                 .foregroundStyle(Color.primary)
                 .lineLimit(1)
-            Text(DueText.describe(due: item.due, hasTime: item.hasTime, now: date) + (item.isRough ? " · 待完善" : ""))
+            Text(item.caption(now: date))
                 .font(.caption2)
                 .foregroundStyle(overdue ? Color.red : Color.secondary)
                 .lineLimit(1)
@@ -186,9 +186,11 @@ extension WidgetSnapshot {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
         return WidgetSnapshot(items: [
-            Item(id: UUID(), title: "报销会议差旅", due: calendar.date(byAdding: .day, value: -2, to: today)!, hasTime: false, isRough: false),
-            Item(id: UUID(), title: "和导师开组会", due: calendar.date(bySettingHour: 15, minute: 0, second: 0, of: today)!, hasTime: true, isRough: false),
-            Item(id: UUID(), title: "回房东邮件 暖气", due: today, hasTime: false, isRough: true),
+            Item(id: UUID(), title: "报销会议差旅", hasDue: true, due: calendar.date(byAdding: .day, value: -2, to: today)!,
+                 hasTime: false, urgency: .soon, isRough: false),
+            Item(id: UUID(), title: "和导师开组会", hasDue: true, due: calendar.date(bySettingHour: 15, minute: 0, second: 0, of: today)!,
+                 hasTime: true, urgency: .urgent, isRough: false),
+            Item(id: UUID(), title: "回房东邮件：暖气", hasDue: false, due: today, hasTime: false, urgency: .urgent, isRough: true),
         ], roughCount: 1)
     }
 }

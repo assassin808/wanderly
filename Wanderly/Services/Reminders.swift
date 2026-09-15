@@ -9,14 +9,19 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     static let shared = Reminders()
 
     private enum Category {
+        /// 做完了吗 / 还在进行吗：完成、明天再问。
         static let entry = "ENTRY"
-        static let evening = "EVENING"
+        /// 去完善：回答、稍后提醒。
+        static let refine = "REFINE"
+        /// 好几条等着完善：点开进入完善流程。
+        static let refineDigest = "REFINE_DIGEST"
     }
 
     private enum Action {
         static let done = "DONE"
         static let snooze = "SNOOZE"
-        static let refine = "REFINE"
+        static let answer = "ANSWER"
+        static let later = "LATER"
     }
 
     private let center = UNUserNotificationCenter.current()
@@ -28,11 +33,13 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         center.setNotificationCategories([
             UNNotificationCategory(identifier: Category.entry, actions: [
                 UNNotificationAction(identifier: Action.done, title: "完成", options: []),
-                UNNotificationAction(identifier: Action.snooze, title: "推迟到明天", options: []),
+                UNNotificationAction(identifier: Action.snooze, title: "明天再问", options: []),
             ], intentIdentifiers: []),
-            UNNotificationCategory(identifier: Category.evening, actions: [
-                UNNotificationAction(identifier: Action.refine, title: "去完善", options: [.foreground]),
+            UNNotificationCategory(identifier: Category.refine, actions: [
+                UNNotificationAction(identifier: Action.answer, title: "回答", options: [.foreground]),
+                UNNotificationAction(identifier: Action.later, title: "3 小时后提醒", options: []),
             ], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Category.refineDigest, actions: [], intentIdentifiers: []),
         ])
         // 另一台设备改了数据，iCloud 同步过来之后重排提醒。
         NotificationCenter.default.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil, queue: .main) { _ in
@@ -65,11 +72,13 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         // 只清掉自己排的提醒，不动还没弹出的测试通知。
         let planned = await center.pendingNotificationRequests().map(\.identifier).filter { !$0.hasPrefix("test-") }
         center.removePendingNotificationRequests(withIdentifiers: planned)
-        let closedIDs = snapshots.filter { !$0.state.isActive }.flatMap { ["due-\($0.id.uuidString)", "check-\($0.id.uuidString)"] }
-        center.removeDeliveredNotifications(withIdentifiers: closedIDs)
+        let closed = snapshots.filter { !$0.state.isActive }.map(\.id.uuidString)
+        let delivered = await center.deliveredNotifications().map(\.request.identifier)
+        center.removeDeliveredNotifications(withIdentifiers: delivered.filter { id in closed.contains { id.contains($0) } })
 
-        let needsAttention = snapshots.filter {
-            $0.state == .rough || ($0.state.isActive && DueText.isOverdue(due: $0.due, hasTime: $0.hasTime, now: now))
+        let needsAttention = snapshots.filter { entry in
+            entry.state.isActive && entry.urgency != .archive
+                && (entry.state == .rough || (entry.hasDue && DueText.isOverdue(due: entry.due, hasTime: entry.hasTime, now: now)))
         }.count
         try? await center.setBadgeCount(Preferences.remindersOnThisDevice ? needsAttention : 0)
 
@@ -79,7 +88,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 有待办时，测试通知带上「完成 / 推迟到明天」按钮，作用在最早到期的那一条上。
+    /// 有待办时，测试通知带上「完成 / 明天再问」按钮，作用在最早到期的那一条上。
     func sendTest() async {
         await requestAuthorizationIfNeeded()
         let content = UNMutableNotificationContent()
@@ -103,9 +112,10 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         content.sound = .default
         content.threadIdentifier = item.kind.rawValue
         switch item.kind {
-        case .due, .check: content.categoryIdentifier = Category.entry
-        case .evening: content.categoryIdentifier = Category.evening
-        case .morning, .keepAlive: break
+        case .due, .check, .checkIn: content.categoryIdentifier = Category.entry
+        case .refine, .water: content.categoryIdentifier = Category.refine
+        case .refineDigest: content.categoryIdentifier = Category.refineDigest
+        case .morning, .checkInDigest, .keepAlive: break
         }
         if let entryID = item.entryID {
             content.userInfo = ["entryID": entryID.uuidString]
@@ -141,22 +151,25 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func handle(action: String, category: String, entryID: UUID?) async {
+        let context = Persistence.container.mainContext
         switch action {
-        case Action.done, Action.snooze:
+        case Action.done, Action.snooze, Action.later:
             guard let entryID, let entry = entry(with: entryID) else { return }
-            if action == Action.done {
+            switch action {
+            case Action.done:
                 entry.state = .done
-            } else {
+                entry.touch()
+            case Action.snooze:
                 entry.snooze()
+            default:
+                entry.snoozedUntil = Calendar.current.date(byAdding: .hour, value: 3, to: .now)
             }
-            try? Persistence.container.mainContext.save()
+            try? context.save()
             await reschedule()
-        case Action.refine:
-            AppRouter.shared.showRefine = hasRoughEntries()
-        case UNNotificationDefaultActionIdentifier:
+        case Action.answer, UNNotificationDefaultActionIdentifier:
             if let entryID {
                 AppRouter.shared.openEntryID = entryID
-            } else if category == Category.evening {
+            } else if category == Category.refineDigest {
                 AppRouter.shared.showRefine = hasRoughEntries()
             }
         default:

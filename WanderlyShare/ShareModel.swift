@@ -3,7 +3,7 @@ import Observation
 import UniformTypeIdentifiers
 import WanderlyCore
 
-/// 分享进来的文字和链接，存进 App Group 收件箱，等 App 打开时导入。
+/// 分享进来的文字和链接，存进 App Group 收件箱，等 App 打开时导入并交给 AI 整理。
 @Observable
 final class ShareModel {
     var text = ""
@@ -30,9 +30,10 @@ final class ShareModel {
         text = parts.filter { !$0.isEmpty && seen.insert($0).inserted }.joined(separator: "\n")
     }
 
-    func save(due: Date, hasTime: Bool) throws {
+    func save(urgency: Urgency, due: DetectedDue?) throws {
         guard let directory = SharedContainer.defaultURL else { throw CocoaError(.fileNoSuchFile) }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        try SharedContainer.addToInbox(InboxItem(text: trimmed, due: due, hasTime: hasTime), in: directory)
+        let item = InboxItem(text: trimmed, urgency: urgency, due: due?.date, hasTime: due?.hasTime ?? false)
+        try SharedContainer.addToInbox(item, in: directory)
     }
 }

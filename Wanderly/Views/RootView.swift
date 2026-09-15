@@ -40,7 +40,7 @@ struct RootView: View {
                 }
         }
         .sheet(item: $editing) { entry in
-            EntryEditor(entry: entry)
+            EntryDetailView(entry: entry)
         }
         .sheet(isPresented: $router.showRefine) {
             RefineFlowView()

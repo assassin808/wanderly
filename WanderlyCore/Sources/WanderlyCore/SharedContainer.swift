@@ -1,19 +1,39 @@
 import Foundation
 
-/// 分享扩展存下、等 App 导入的一条速记。
+/// 分享扩展存下、等 App 导入的一条记录。
 public struct InboxItem: Codable, Sendable, Equatable, Identifiable {
     public var id: UUID
     public var text: String
+    public var urgency: Urgency
+    public var hasDue: Bool
     public var due: Date
     public var hasTime: Bool
     public var createdAt: Date
 
-    public init(id: UUID = UUID(), text: String, due: Date, hasTime: Bool, createdAt: Date = Date()) {
+    public init(id: UUID = UUID(), text: String, urgency: Urgency = .soon, due: Date? = nil, hasTime: Bool = false, createdAt: Date = Date()) {
         self.id = id
         self.text = text
-        self.due = due
+        self.urgency = urgency
+        self.hasDue = due != nil
+        self.due = due ?? createdAt
         self.hasTime = hasTime
         self.createdAt = createdAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, text, urgency, hasDue, due, hasTime, createdAt
+    }
+
+    /// 早期版本的收件箱文件没有紧急程度和 hasDue。
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        text = try container.decode(String.self, forKey: .text)
+        urgency = try container.decodeIfPresent(Urgency.self, forKey: .urgency) ?? .soon
+        hasDue = try container.decodeIfPresent(Bool.self, forKey: .hasDue) ?? true
+        due = try container.decode(Date.self, forKey: .due)
+        hasTime = try container.decode(Bool.self, forKey: .hasTime)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
 }
 
@@ -35,14 +55,14 @@ public enum SharedContainer {
         return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
     }
 
-    /// 每条速记单独一个文件，原子写入，App 读取时不会读到写了一半的内容。
+    /// 每条记录单独一个文件，原子写入，App 读取时不会读到写了一半的内容。
     public static func addToInbox(_ item: InboxItem, in directory: URL) throws {
         let inbox = inboxURL(in: directory)
         try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
         try JSONEncoder().encode(item).write(to: inbox.appending(path: "\(item.id.uuidString).json"), options: .atomic)
     }
 
-    /// 取出并删除收件箱里的所有速记，按记录时间排序。
+    /// 取出并删除收件箱里的所有记录，按记录时间排序。
     public static func takeInbox(in directory: URL) -> [InboxItem] {
         let files = (try? FileManager.default.contentsOfDirectory(at: inboxURL(in: directory), includingPropertiesForKeys: nil)) ?? []
         var items: [InboxItem] = []

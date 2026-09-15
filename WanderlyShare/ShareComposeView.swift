@@ -5,7 +5,7 @@ struct ShareComposeView: View {
     @Bindable var model: ShareModel
     let onDone: () -> Void
     let onCancel: () -> Void
-    @State private var shortcut: DueShortcut = .weekend
+    @State private var urgency: Urgency = .soon
     @State private var useDetected = true
     @State private var errorMessage: String?
 
@@ -23,19 +23,19 @@ struct ShareComposeView: View {
                         .lineLimit(3...10)
                 }
                 Section {
-                    if let detected {
-                        Toggle("识别到 \(DueText.describe(due: detected.date, hasTime: detected.hasTime, now: .now))", isOn: $useDetected)
-                    }
-                    Picker("截止", selection: $shortcut) {
-                        ForEach(DueShortcut.allCases) { option in
-                            Text(option.label(from: .now)).tag(option)
+                    Picker("紧急程度", selection: $urgency) {
+                        ForEach(Urgency.allCases) { option in
+                            Text(option.label).tag(option)
                         }
                     }
-                    .disabled(detected != nil && useDetected)
+                    .pickerStyle(.segmented)
+                    if let detected {
+                        Toggle("截止：\(DueText.describe(due: detected.date, hasTime: detected.hasTime, now: .now))", isOn: $useDetected)
+                    }
                 } header: {
-                    Text("截止")
+                    Text("多紧急")
                 } footer: {
-                    Text("打开 Wanderly 时会加进列表，并排好提醒。")
+                    Text("打开 Wanderly 时，AI 会整理归类、提出问题，并排好提醒。")
                 }
                 if let errorMessage {
                     Section {
@@ -62,9 +62,8 @@ struct ShareComposeView: View {
     }
 
     private func save() {
-        let chosen = useDetected ? detected : nil
         do {
-            try model.save(due: chosen?.date ?? shortcut.date(from: .now), hasTime: chosen?.hasTime ?? false)
+            try model.save(urgency: urgency, due: useDetected ? detected : nil)
             onDone()
         } catch {
             errorMessage = "没能存下：\(error.localizedDescription)"
