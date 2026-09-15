@@ -60,6 +60,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         let context = Persistence.container.mainContext
         let snapshots = ((try? context.fetch(FetchDescriptor<Entry>())) ?? []).map(\.snapshot)
         let now = Date.now
+        WidgetBridge.publish(snapshots)
 
         // 只清掉自己排的提醒，不动还没弹出的测试通知。
         let planned = await center.pendingNotificationRequests().map(\.identifier).filter { !$0.hasPrefix("test-") }
@@ -104,7 +105,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         switch item.kind {
         case .due, .check: content.categoryIdentifier = Category.entry
         case .evening: content.categoryIdentifier = Category.evening
-        case .morning: break
+        case .morning, .keepAlive: break
         }
         if let entryID = item.entryID {
             content.userInfo = ["entryID": entryID.uuidString]

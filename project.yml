@@ -28,8 +28,12 @@ targets:
       Release: Config/Wanderly.xcconfig
     sources:
       - path: Wanderly
+      # 小组件界面也编进 App，用于调试渲染预览图。
+      - path: WanderlyWidgets/TodayWidgetView.swift
     dependencies:
       - package: WanderlyCore
+      - target: WanderlyWidgets
+      - target: WanderlyShare
     info:
       path: Wanderly/Info.plist
       properties:
@@ -39,8 +43,12 @@ targets:
         LSApplicationCategoryType: public.app-category.productivity
         ITSAppUsesNonExemptEncryption: false
         GeminiAPIKey: $(GEMINI_API_KEY)
+        CFBundleURLTypes:
+          - CFBundleURLName: io.github.assassin808.wanderly
+            CFBundleURLSchemes: [wanderly]
+        BGTaskSchedulerPermittedIdentifiers: [io.github.assassin808.wanderly.refresh]
         UILaunchScreen: {}
-        UIBackgroundModes: [remote-notification]
+        UIBackgroundModes: [remote-notification, fetch]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
@@ -60,6 +68,73 @@ targets:
     scheme:
       testTargets:
         - WanderlyUITests
+
+  WanderlyWidgets:
+    type: app-extension
+    platform: auto
+    supportedDestinations: [iOS, macOS]
+    deploymentTarget:
+      iOS: "18.0"
+      macOS: "15.0"
+    sources:
+      - path: WanderlyWidgets
+      - path: Wanderly/Services/OpenCaptureIntent.swift
+    dependencies:
+      - package: WanderlyCore
+    info:
+      path: WanderlyWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Wanderly
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_NAME: WanderlyWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.assassin808.wanderly.widgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WIDGET_EXTENSION
+        CODE_SIGN_ENTITLEMENTS: WanderlyWidgets/WanderlyWidgets.entitlements
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": WanderlyWidgets/WanderlyWidgets-macOS.entitlements
+
+  WanderlyShare:
+    type: app-extension
+    platform: auto
+    supportedDestinations: [iOS, macOS]
+    deploymentTarget:
+      iOS: "18.0"
+      macOS: "15.0"
+    sources:
+      - path: WanderlyShare
+    dependencies:
+      - package: WanderlyCore
+    info:
+      path: WanderlyShare/Info.plist
+      properties:
+        CFBundleDisplayName: Wanderly
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+    settings:
+      base:
+        PRODUCT_NAME: WanderlyShare
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.assassin808.wanderly.share
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: WanderlyShare/WanderlyShare.entitlements
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": WanderlyShare/WanderlyShare-macOS.entitlements
+
   WanderlyUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -68,6 +143,7 @@ targets:
       - path: WanderlyUITests
     dependencies:
       - target: Wanderly
+      - package: WanderlyCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.assassin808.wanderly.uitests

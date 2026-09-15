@@ -30,6 +30,8 @@ public struct PlannedNotification: Equatable, Sendable {
         case due
         /// 单条确认：做完了吗？
         case check
+        /// 排在所有提醒之后：很久没打开 App 时提醒打开，让之后的提醒接上。
+        case keepAlive
     }
 
     public var id: String
@@ -40,7 +42,7 @@ public struct PlannedNotification: Equatable, Sendable {
     public var entryID: UUID?
 }
 
-/// 根据当前数据算出未来几天要发的本地通知。每次数据变化后整体重排。
+/// 根据当前数据算出未来两周要发的本地通知。每次数据变化、App 回到前台或后台刷新时整体重排。
 public enum ReminderPlanner {
     /// iOS 最多保留 64 条待发本地通知，留一点余量。
     public static let maxPending = 60
@@ -50,7 +52,7 @@ public enum ReminderPlanner {
         settings: ReminderSettings,
         now: Date,
         calendar: Calendar = .current,
-        days: Int = 7
+        days: Int = 14
     ) -> [PlannedNotification] {
         let active = entries.filter { $0.state.isActive }
         let today = calendar.startOfDay(for: now)
@@ -116,17 +118,26 @@ public enum ReminderPlanner {
         }
 
         result.sort { ($0.fireDate, $0.id) < ($1.fireDate, $1.id) }
-        return Array(result.prefix(maxPending))
+        var planned = Array(result.prefix(maxPending - 1))
+
+        if !active.isEmpty {
+            let last = planned.last?.fireDate ?? now
+            planned.append(PlannedNotification(
+                id: "keep-alive", kind: .keepAlive,
+                fireDate: nextEvening(after: last, settings: settings, calendar: calendar).addingTimeInterval(5 * 60),
+                title: "Wanderly", body: "有一阵没打开 Wanderly 了，打开看一眼，之后的提醒才会接着排上。", entryID: nil))
+        }
+        return planned
     }
 
     static func at(_ day: Date, minute: Int, calendar: Calendar) -> Date {
         calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: day)!
     }
 
-    static func nextEvening(after now: Date, settings: ReminderSettings, calendar: Calendar) -> Date {
-        let tonight = at(calendar.startOfDay(for: now), minute: settings.eveningMinute, calendar: calendar)
-        if tonight > now { return tonight }
-        return calendar.date(byAdding: .day, value: 1, to: tonight)!
+    static func nextEvening(after date: Date, settings: ReminderSettings, calendar: Calendar) -> Date {
+        let evening = at(calendar.startOfDay(for: date), minute: settings.eveningMinute, calendar: calendar)
+        if evening > date { return evening }
+        return calendar.date(byAdding: .day, value: 1, to: evening)!
     }
 
     static func dayKey(_ day: Date, calendar: Calendar) -> String {

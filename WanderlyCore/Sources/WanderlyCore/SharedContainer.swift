@@ -1,0 +1,65 @@
+import Foundation
+
+/// 分享扩展存下、等 App 导入的一条速记。
+public struct InboxItem: Codable, Sendable, Equatable, Identifiable {
+    public var id: UUID
+    public var text: String
+    public var due: Date
+    public var hasTime: Bool
+    public var createdAt: Date
+
+    public init(id: UUID = UUID(), text: String, due: Date, hasTime: Bool, createdAt: Date = Date()) {
+        self.id = id
+        self.text = text
+        self.due = due
+        self.hasTime = hasTime
+        self.createdAt = createdAt
+    }
+}
+
+/// App、小组件和分享扩展共用的 App Group 目录。
+public enum SharedContainer {
+    public static let appGroup = "group.io.github.assassin808.wanderly"
+
+    /// 没有 App Group 权限（比如未签名的调试包）时为 nil。
+    public static var defaultURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
+    }
+
+    public static func writeSnapshot(_ snapshot: WidgetSnapshot, in directory: URL) throws {
+        try JSONEncoder().encode(snapshot).write(to: snapshotURL(in: directory), options: .atomic)
+    }
+
+    public static func readSnapshot(in directory: URL) -> WidgetSnapshot? {
+        guard let data = try? Data(contentsOf: snapshotURL(in: directory)) else { return nil }
+        return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
+    }
+
+    /// 每条速记单独一个文件，原子写入，App 读取时不会读到写了一半的内容。
+    public static func addToInbox(_ item: InboxItem, in directory: URL) throws {
+        let inbox = inboxURL(in: directory)
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        try JSONEncoder().encode(item).write(to: inbox.appending(path: "\(item.id.uuidString).json"), options: .atomic)
+    }
+
+    /// 取出并删除收件箱里的所有速记，按记录时间排序。
+    public static func takeInbox(in directory: URL) -> [InboxItem] {
+        let files = (try? FileManager.default.contentsOfDirectory(at: inboxURL(in: directory), includingPropertiesForKeys: nil)) ?? []
+        var items: [InboxItem] = []
+        for file in files where file.pathExtension == "json" {
+            if let data = try? Data(contentsOf: file), let item = try? JSONDecoder().decode(InboxItem.self, from: data) {
+                items.append(item)
+            }
+            try? FileManager.default.removeItem(at: file)
+        }
+        return items.sorted { $0.createdAt < $1.createdAt }
+    }
+
+    static func snapshotURL(in directory: URL) -> URL {
+        directory.appending(path: "widget-snapshot.json")
+    }
+
+    static func inboxURL(in directory: URL) -> URL {
+        directory.appending(path: "inbox", directoryHint: .isDirectory)
+    }
+}

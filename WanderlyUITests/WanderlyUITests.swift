@@ -1,3 +1,4 @@
+import WanderlyCore
 import XCTest
 
 /// 在模拟器里走一遍主要流程。全部使用 `-demo` 内存数据库，不碰真实数据。
@@ -33,6 +34,37 @@ final class WanderlyUITests: XCTestCase {
 
         XCTAssertTrue(row.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.buttons["完善 2"].waitForExistence(timeout: 5))
+    }
+
+    func testDetectsTimeWhileTyping() throws {
+        let app = launch(["-demo", "-skipNotificationPrompt"])
+
+        let field = app.textFields["captureField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 15))
+        field.tap()
+        let text = "周五下午三点和导师聊 eval"
+        field.typeText(text)
+
+        let detected = try XCTUnwrap(DueParser.parse(text, now: .now))
+        let label = DueText.describe(due: detected.date, hasTime: detected.hasTime, now: .now)
+        XCTAssertTrue(app.buttons["识别到 \(label)"].waitForExistence(timeout: 5))
+
+        field.typeText("\n")
+        app.keyboards.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[label].exists, "新记的事应该带着识别到的时间")
+    }
+
+    func testCaptureLinkFocusesInput() {
+        let app = launch(["-demo", "-skipNotificationPrompt"])
+        XCTAssertTrue(app.textFields["captureField"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+
+        app.open(URL(string: "wanderly://capture")!)
+        let confirm = springboard.buttons.matching(NSPredicate(format: "label IN {'Open', '打开'}")).firstMatch
+        if confirm.waitForExistence(timeout: 2) { confirm.tap() }
+
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "wanderly://capture 应该让输入框获得焦点")
     }
 
     func testRefineFlow() {

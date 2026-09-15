@@ -59,19 +59,39 @@ struct RootView: View {
             }
         }
         #endif
+        .onOpenURL { url in
+            router.handle(url)
+        }
         .onChange(of: router.openEntryID) { _, id in
             guard let id else { return }
             editing = entries.first { $0.id == id }
             router.openEntryID = nil
         }
+        .onChange(of: router.captureRequest) {
+            editing = nil
+            showSettings = false
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .inactive { Reminders.shared.scheduleSoon() }
+            switch phase {
+            case .active:
+                Task { await AppRefresh.run() }
+            case .background:
+                #if os(iOS)
+                AppRefresh.scheduleBackgroundRefresh()
+                #endif
+                Reminders.shared.scheduleSoon()
+            default:
+                break
+            }
         }
         .task {
             if !ProcessInfo.processInfo.arguments.contains("-skipNotificationPrompt") {
                 await Reminders.shared.requestAuthorizationIfNeeded()
             }
-            Reminders.shared.scheduleSoon()
+            #if DEBUG && os(iOS)
+            WidgetPreviewRenderer.runIfRequested()
+            #endif
+            await AppRefresh.run()
         }
     }
 }

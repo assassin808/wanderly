@@ -26,6 +26,22 @@ enum EntryActions {
         save(context)
     }
 
+    /// 把分享扩展放进 App Group 收件箱的速记导入数据库。
+    @discardableResult
+    static func importInbox(into context: ModelContext) -> Int {
+        guard let directory = SharedContainer.defaultURL else { return 0 }
+        let items = SharedContainer.takeInbox(in: directory)
+        for item in items {
+            let entry = Entry(text: item.text, due: item.due, hasTime: item.hasTime)
+            entry.createdAt = item.createdAt
+            context.insert(entry)
+        }
+        if !items.isEmpty {
+            try? context.save()
+        }
+        return items.count
+    }
+
     static func save(_ context: ModelContext) {
         try? context.save()
         Reminders.shared.scheduleSoon()

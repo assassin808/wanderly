@@ -81,4 +81,20 @@ struct ReminderPlannerTests {
         #expect(p.count == ReminderPlanner.maxPending)
         #expect(zip(p, p.dropFirst()).allSatisfy { $0.fireDate <= $1.fireDate })
     }
+
+    @Test func keepAliveComesAfterEverythingElse() throws {
+        let entry = EntrySnapshot(title: "组会", due: d(2026, 9, 15, 15), hasTime: true, state: .open)
+        let p = plan([entry])
+        let keepAlive = try #require(p.last)
+        #expect(keepAlive.kind == .keepAlive)
+        #expect(p.filter { $0.kind == .keepAlive }.count == 1)
+        #expect(p.dropLast().allSatisfy { $0.fireDate < keepAlive.fireDate })
+    }
+
+    @Test func plansTwoWeeksAhead() {
+        let entry = EntrySnapshot(title: "长期的事", due: d(2026, 9, 25), state: .open)
+        let p = plan([entry])
+        #expect(p.contains { $0.id == "morning-2026-09-25" })
+        #expect(p.first { $0.kind == .check }?.fireDate == d(2026, 9, 25, 21, 30))
+    }
 }

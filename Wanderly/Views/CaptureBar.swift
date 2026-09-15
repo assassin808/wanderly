@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import WanderlyCore
 
-/// 一行输入加几个截止日期按钮。回车就存。
+/// 一行输入加几个截止日期按钮。回车就存；能从输入里识别出时间时优先用识别到的。
 struct CaptureBar: View {
     @Environment(\.modelContext) private var context
     @State private var text = ""
@@ -11,10 +11,17 @@ struct CaptureBar: View {
     @State private var customDate = Date.now
     @State private var customHasTime = false
     @State private var showPicker = false
+    @State private var ignoreDetected = false
     @State private var savedCount = 0
     @FocusState private var focused: Bool
 
     private var canSave: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    /// 用户点掉了识别结果，或者手动选了日期，就不再用识别到的时间。
+    private var detected: DetectedDue? {
+        guard !ignoreDetected, !useCustom else { return nil }
+        return DueParser.parse(text, now: .now)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -34,8 +41,15 @@ struct CaptureBar: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
+                    if let detected {
+                        Chip(title: "识别到 " + DueText.describe(due: detected.date, hasTime: detected.hasTime, now: .now),
+                             systemImage: "sparkles", selected: true) {
+                            ignoreDetected = true
+                        }
+                    }
                     ForEach(DueShortcut.allCases) { option in
-                        Chip(title: option.label(from: .now), selected: !useCustom && shortcut == option) {
+                        Chip(title: option.label(from: .now), selected: detected == nil && !useCustom && shortcut == option) {
+                            ignoreDetected = true
                             useCustom = false
                             shortcut = option
                         }
@@ -54,15 +68,32 @@ struct CaptureBar: View {
         }
         .padding(.vertical, 4)
         .sensoryFeedback(.success, trigger: savedCount)
+        .onChange(of: AppRouter.shared.captureRequest) {
+            // 等打开着的 sheet 收起来再聚焦，否则键盘弹不出来。
+            Task {
+                try? await Task.sleep(for: .milliseconds(400))
+                focused = true
+            }
+        }
     }
 
     private func save() {
         guard canSave else { return }
-        let due = useCustom
-            ? (customHasTime ? customDate : Calendar.current.startOfDay(for: customDate))
-            : shortcut.date(from: .now)
-        EntryActions.capture(text, due: due, hasTime: useCustom && customHasTime, in: context)
+        let due: Date
+        let hasTime: Bool
+        if let detected {
+            due = detected.date
+            hasTime = detected.hasTime
+        } else if useCustom {
+            due = customHasTime ? customDate : Calendar.current.startOfDay(for: customDate)
+            hasTime = customHasTime
+        } else {
+            due = shortcut.date(from: .now)
+            hasTime = false
+        }
+        EntryActions.capture(text, due: due, hasTime: hasTime, in: context)
         text = ""
+        ignoreDetected = false
         savedCount += 1
         focused = true
     }
