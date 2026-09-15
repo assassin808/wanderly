@@ -39,7 +39,13 @@ public struct InboxItem: Codable, Sendable, Equatable, Identifiable {
 
 /// App、小组件和分享扩展共用的 App Group 目录。
 public enum SharedContainer {
+    #if os(macOS)
+    /// macOS 上 `group.` 开头的 App Group 受隐私保护：签名对不上时系统会弹「访问其他 App 的数据」并卡住访问线程。
+    /// 用 Team ID 开头的写法不会弹窗。
+    public static let appGroup = "ZS2UVBACK8.io.github.assassin808.wanderly"
+    #else
     public static let appGroup = "group.io.github.assassin808.wanderly"
+    #endif
 
     /// 没有 App Group 权限（比如未签名的调试包）时为 nil。
     public static var defaultURL: URL? {
