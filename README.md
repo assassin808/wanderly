@@ -19,7 +19,7 @@ Wanderly is a small native app for iPhone and Mac for the irregular things in a 
 - If a note is still overdue, you get asked again the next evening.
 - On Sunday evening, notes due later than a week out show up for a quick review.
 
-Settings shows the next reminders that are scheduled on this device.
+Settings shows the next reminders scheduled on this device and whether iCloud sync is working.
 
 **Sync.** Notes sync between devices through iCloud (a CloudKit private database). There's no server and no account to create.
 

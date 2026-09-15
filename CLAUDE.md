@@ -24,12 +24,13 @@ The shared prompt lives in `WanderlyCore/Sources/WanderlyCore/Refinement.swift`.
 
 - `project.yml`: XcodeGen spec. The `.xcodeproj` and `Wanderly/Info.plist` are generated with `xcodegen generate` and are not committed.
 - `WanderlyCore/`: pure Swift package with no SwiftUI or SwiftData. It holds deadline math (`Due.swift`), reminder planning (`ReminderPlanner.swift`), and the AI clients (`Refinement.swift`, `GeminiRefiner.swift`, `ClaudeRefiner.swift`). Put testable logic here and cover it with `swift test`; `StubResponses` fakes HTTP responses.
-- `Wanderly/`: the multiplatform SwiftUI app. `Model/` holds SwiftData and CloudKit code, `Services/` holds notifications, preferences, Keychain, and the App Intent, and `Views/` holds the views.
+- `Wanderly/`: the multiplatform SwiftUI app. `Model/` holds SwiftData and CloudKit code, `Services/` holds notifications, preferences, Keychain, iCloud sync status, and the App Intent, and `Views/` holds the views.
 - `WanderlyUITests/`: iOS simulator UI tests. They always launch with `-demo`, so they never touch real data.
 
 ## Constraints
 
 - SwiftData syncs through CloudKit. Every `@Model` property needs a default value or must be optional. No `@Attribute(.unique)`. Schema changes must be additive.
+- SwiftData's CloudKit sync events (shown by `SyncStatus`) lose the error details, and the system log hides them as `<private>`. To see the real error, call `CKContainer(identifier:)` directly and log the error with `privacy: .public`.
 - iOS keeps at most 64 pending local notifications. `ReminderPlanner.maxPending` caps the plan at 60. Rescheduling only removes planned requests, never pending `test-` notifications.
 - The app target uses Swift 5 mode with default `MainActor` isolation. App Intent `perform()` and notification delegate callbacks need explicit isolation.
 - Reminder settings and the AI provider choice are stored per device in UserDefaults. Entries sync.

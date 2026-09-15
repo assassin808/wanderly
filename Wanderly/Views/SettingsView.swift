@@ -59,6 +59,28 @@ struct SettingsView: View {
                 }
             }
 
+            Section("iCloud 同步") {
+                if Persistence.isDemo {
+                    Text("示例数据不会同步").foregroundStyle(.secondary)
+                } else {
+                    switch SyncStatus.shared.state {
+                    case .waiting:
+                        Text("正在连接 iCloud…").foregroundStyle(.secondary)
+                    case let .synced(date):
+                        Label("已同步 · \(DueText.describe(due: date, hasTime: true, now: .now))", systemImage: "checkmark.icloud")
+                    case let .failed(detail):
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("同步出错", systemImage: "exclamationmark.icloud")
+                                .foregroundStyle(.red)
+                            Text(detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+
             Section("提醒时间") {
                 DatePicker("早上：今天到期的事", selection: minutes($morningMinute), displayedComponents: .hourAndMinute)
                 DatePicker("晚上：完善速记、确认做完", selection: minutes($eveningMinute), displayedComponents: .hourAndMinute)

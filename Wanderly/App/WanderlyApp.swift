@@ -4,6 +4,8 @@ import SwiftData
 @main
 struct WanderlyApp: App {
     init() {
+        // 要在第一次访问 Persistence.container 之前开始监听，才能收到 setup 事件。
+        SyncStatus.shared.start()
         Reminders.shared.start()
         if Persistence.isDemo, ProcessInfo.processInfo.arguments.contains("-refine") {
             AppRouter.shared.showRefine = true
