@@ -69,11 +69,13 @@ struct EntryDetailView: View {
 }
 
 /// 详情和完善流程共用：可编辑的记录内容加对话。
+/// 对话放在最显眼的位置：还有没回答的 AI 问题时，输入框上方直接显示问题，打开时也会滚到问题那里。
 struct EntryConversation: View {
     @Bindable var entry: Entry
     @Environment(\.modelContext) private var context
     @State private var draft = ""
     @State private var showOriginal = false
+    @State private var showSettings = false
     @FocusState private var inputFocused: Bool
 
     private var worker: AIWorker { AIWorker.shared }
@@ -85,21 +87,26 @@ struct EntryConversation: View {
                     // 标题为空时占位显示原文第一行；绑定 aiTitle 本身，删空时不会被第一行填回来。
                     TextField(entry.firstLine, text: titleBinding, axis: .vertical)
                         .font(.title3.weight(.semibold))
-                    Picker("紧急程度", selection: urgencyBinding) {
-                        ForEach(Urgency.allCases) { option in
-                            Text(option.label).tag(option)
+                    // 紧急程度、类别、截止收成一行，点开再改，免得把对话挤到屏幕外。
+                    DisclosureGroup(isExpanded: $showSettings) {
+                        Picker("紧急程度", selection: urgencyBinding) {
+                            ForEach(Urgency.allCases) { option in
+                                Text(option.label).tag(option)
+                            }
                         }
-                    }
-                    .pickerStyle(.segmented)
-                    Picker("类别", selection: categoryBinding) {
-                        ForEach(EntryCategory.allCases) { option in
-                            Label(option.label, systemImage: option.systemImage).tag(option)
+                        .pickerStyle(.segmented)
+                        Picker("类别", selection: categoryBinding) {
+                            ForEach(EntryCategory.allCases) { option in
+                                Label(option.label, systemImage: option.systemImage).tag(option)
+                            }
                         }
+                        DueEditor(entry: entry)
+                    } label: {
+                        Text(settingsSummary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                }
-
-                Section("截止") {
-                    DueEditor(entry: entry)
+                    .accessibilityIdentifier("entrySettings")
                 }
 
                 Section {
@@ -140,6 +147,7 @@ struct EntryConversation: View {
                 Section("对话") {
                     ForEach(entry.sortedMessages) { message in
                         MessageBubble(message: message)
+                            .id(message.id)
                             .listRowSeparator(.hidden)
                     }
                     if worker.replying.contains(entry.id) {
@@ -163,17 +171,45 @@ struct EntryConversation: View {
                     }
                     Color.clear
                         .frame(height: 1)
-                        .id("bottom")
+                        .id(Self.bottomID)
                         .listRowSeparator(.hidden)
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                inputBar
+                inputBar(proxy: proxy)
+            }
+            .onAppear {
+                // 打开时优先让没回答的问题露出来，否则停在最新一条对话。
+                if let question = entry.pendingQuestion {
+                    scroll(proxy, to: question.id, anchor: .top, animated: false)
+                } else if !entry.sortedMessages.isEmpty {
+                    scroll(proxy, to: Self.bottomID, anchor: .bottom, animated: false)
+                }
             }
             .onChange(of: entry.messages?.count) {
-                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                scroll(proxy, to: Self.bottomID, anchor: .bottom, animated: true)
             }
         }
+    }
+
+    private static let bottomID = "conversation-bottom"
+
+    /// List 要先排好版才能滚动，稍等一下再滚。
+    private func scroll(_ proxy: ScrollViewProxy, to id: some Hashable, anchor: UnitPoint, animated: Bool) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            if animated {
+                withAnimation { proxy.scrollTo(id, anchor: anchor) }
+            } else {
+                proxy.scrollTo(id, anchor: anchor)
+            }
+        }
+    }
+
+    private var settingsSummary: String {
+        var parts = [entry.category?.label ?? "未分类", entry.urgency.label]
+        if let due = entry.dueLabel { parts.append("截止 \(due)") }
+        return parts.joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -209,23 +245,44 @@ struct EntryConversation: View {
         }
     }
 
-    private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField(entry.pendingQuestion != nil ? "回答 AI 的问题…" : "和 AI 聊聊这件事…", text: $draft, axis: .vertical)
-                .lineLimit(1...5)
-                .focused($inputFocused)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
-                .accessibilityIdentifier("chatField")
-                .onSubmit(send)
-            Button(action: send) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title)
+    private func inputBar(proxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 回答时总能看到在回答什么，不用先滚上去找。
+            if let question = entry.pendingQuestion {
+                Button {
+                    scroll(proxy, to: question.id, anchor: .top, animated: true)
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "questionmark.bubble")
+                            .foregroundStyle(.orange)
+                        Text(question.text)
+                            .foregroundStyle(.primary)
+                            .lineLimit(4)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("pendingQuestion")
             }
-            .buttonStyle(.borderless)
-            .disabled(draft.trimmed.isEmpty)
-            .accessibilityIdentifier("chatSend")
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField(entry.pendingQuestion != nil ? "回答 AI 的问题…" : "和 AI 聊聊这件事…", text: $draft, axis: .vertical)
+                    .lineLimit(1...5)
+                    .focused($inputFocused)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
+                    .accessibilityIdentifier("chatField")
+                    .onSubmit(send)
+                Button(action: send) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title)
+                }
+                .buttonStyle(.borderless)
+                .disabled(draft.trimmed.isEmpty)
+                .accessibilityIdentifier("chatSend")
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)

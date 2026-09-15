@@ -63,7 +63,17 @@ final class WanderlyUITests: XCTestCase {
         let row = app.staticTexts["回房东邮件：暖气"]
         XCTAssertTrue(row.waitForExistence(timeout: 15))
         row.tap()
-        XCTAssertTrue(element("aiMessage", in: app).waitForExistence(timeout: 5), "AI 的追问应该在对话里")
+
+        // 回归：以前问题被挤到输入框后面，打开只看得到「回答 AI 的问题…」。问题必须真的在屏幕上。
+        let banner = element("pendingQuestion", in: app)
+        XCTAssertTrue(banner.waitForExistence(timeout: 5), "输入框上方应该显示 AI 的问题")
+        XCTAssertTrue(banner.label.contains("暖气是哪天开始坏的"))
+        XCTAssertTrue(banner.isHittable)
+        let question = element("aiMessage", in: app)
+        XCTAssertTrue(question.waitForExistence(timeout: 5), "AI 的追问应该在对话里")
+        let onScreen = expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: question)
+        wait(for: [onScreen], timeout: 5)
+        attachScreenshot(app, name: "Question visible on open")
 
         let input = element("chatField", in: app)
         input.tap()
