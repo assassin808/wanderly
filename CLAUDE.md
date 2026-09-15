@@ -28,6 +28,7 @@ Wanderly is a native iPhone and Mac app for the irregular things in a day. The u
 ## Constraints
 
 - SwiftData syncs through CloudKit. Every `@Model` property needs a default value or must be optional, relationships must be optional with an inverse, no `@Attribute(.unique)`, and schema changes must be additive. Insert a `ChatMessage` before setting its `entry` (`EntryActions.addMessage`).
+- After a SwiftData delete is saved, the old object reports `isDeleted == false` and has no `modelContext`, and reading its properties can crash. Anything that awaits (AI calls) must keep only the entry's id and re-fetch it afterwards (`AIWorker.liveEntry`).
 - `AIWorker` claims work with `aiStatus`, `aiClaimedAt`, and `aiDevice` so iPhone and Mac don't process the same entry twice. Stale claims are retried after a few minutes; failures after half an hour. On iOS, requests run inside a background task so they finish after the user leaves.
 - In `-demo` the worker is disabled unless `-demoAI` is also passed, so UI tests don't spend API quota by accident.
 - SwiftData's CloudKit sync events (shown by `SyncStatus`) lose the error details, and the system log hides them as `<private>`. To see the real error, call `CKContainer(identifier:)` directly and log the error with `privacy: .public`. A brand-new iCloud container can take over an hour to start accepting zone saves.

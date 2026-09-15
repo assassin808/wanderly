@@ -123,10 +123,10 @@ public enum ReminderPlanner {
                 continue
             }
 
-            if let promptAt = entry.promptAt, let prompt = entry.prompt,
-               promptAt > (entry.lastActivityAt ?? .distantPast), promptAt > now.addingTimeInterval(-24 * 3600) {
-                let fire = nextSlot(after: max(promptAt, now), minute: settings.eveningMinute, calendar: calendar)
-                if fire < horizon {
+            // 浇水问题出现后的第一个晚上提醒一次；那个时间过了就不再排，否则每次重排都会再提醒一遍。
+            if let promptAt = entry.promptAt, let prompt = entry.prompt, promptAt > (entry.lastActivityAt ?? .distantPast) {
+                let fire = nextSlot(after: promptAt, minute: settings.eveningMinute, calendar: calendar)
+                if fire > now, fire < horizon {
                     result.append(PlannedNotification(
                         id: "water-\(entry.id.uuidString)", kind: .water, fireDate: fire,
                         title: "浇水：\(entry.title)", body: prompt, entryID: entry.id))

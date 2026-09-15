@@ -9,6 +9,9 @@ import UIKit
 
 /// 在后台调用 AI：整理新记录、回复对话、Beta 浇水和漫游。
 /// 进度和结果都存在记录里，所以离开页面、切到后台，甚至 App 被关掉，下次都能接着处理。
+///
+/// AI 请求要等几秒到几十秒，期间用户可能把记录删掉了。删掉并保存后再读旧对象的属性可能崩溃，
+/// 所以请求前只记下 id，请求回来后用 `liveEntry(_:)` 重新取。
 @Observable
 final class AIWorker {
     static let shared = AIWorker()
@@ -47,6 +50,14 @@ final class AIWorker {
         return Credentials(provider: provider, key: key)
     }
 
+    /// 重新取一次记录；已经被删掉就返回 nil。
+    private func liveEntry(_ id: UUID) -> Entry? {
+        var descriptor = FetchDescriptor<Entry>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard let entry = try? context.fetch(descriptor).first, !entry.isDeleted else { return nil }
+        return entry
+    }
+
     func kick() {
         Task { await processPending() }
     }
@@ -81,16 +92,19 @@ final class AIWorker {
             case .failed: (entry.aiClaimedAt ?? .distantPast) < now.addingTimeInterval(-1800)
             case .done: false
             }
-        }
-        for entry in toOrganize where !entry.isDeleted {
-            await organize(entry)
-        }
-
+        }.map(\.id)
         // 欠着的回复：这台设备上发出去的（比如等回复时 App 被关掉了），或者上次失败过了一段时间。
-        for entry in entries where !entry.isDeleted && entry.awaitingReply
-            && (entry.replyError.isEmpty || entry.updatedAt < now.addingTimeInterval(-600))
-            && (entry.aiDevice == Self.deviceID || entry.updatedAt < now.addingTimeInterval(-300)) {
-            await sendReply(entry)
+        let owedReplies = entries.filter { entry in
+            entry.awaitingReply
+                && (entry.replyError.isEmpty || entry.updatedAt < now.addingTimeInterval(-600))
+                && (entry.aiDevice == Self.deviceID || entry.updatedAt < now.addingTimeInterval(-300))
+        }.map(\.id)
+
+        for id in toOrganize {
+            if let entry = liveEntry(id) { await organize(entry) }
+        }
+        for id in owedReplies {
+            if let entry = liveEntry(id) { await sendReply(entry) }
         }
     }
 
@@ -108,6 +122,7 @@ final class AIWorker {
             try? context.save()
             return
         }
+        let id = entry.id
         entry.aiStatus = .processing
         entry.aiClaimedAt = .now
         entry.aiDevice = Self.deviceID
@@ -116,7 +131,7 @@ final class AIWorker {
         log.notice("organize start with \(credentials.provider.rawValue, privacy: .public)")
 
         let input = Organizer.Input(
-            text: entry.text, urgency: entry.urgency, knownDue: entry.dueLabel,
+            text: entry.fullText, urgency: entry.urgency, knownDue: entry.dueLabel,
             today: Date.now.formatted(date: .complete, time: .omitted))
         do {
             let result = try await withBackgroundTime {
@@ -124,12 +139,13 @@ final class AIWorker {
                     try await Organizer.run(input, provider: credentials.provider, apiKey: credentials.key)
                 }
             }
-            guard !entry.isDeleted else { return }
+            guard let entry = liveEntry(id) else { return }
             log.notice("organize done: \(result.category.rawValue, privacy: .public), \(result.questions.count) questions")
-            entry.aiTitle = result.title
-            entry.category = result.category
+            // 用户在等待期间自己改过的标题和类别不覆盖。
+            if entry.aiTitle.trimmed.isEmpty { entry.aiTitle = result.title }
+            if entry.category == nil { entry.category = result.category }
             entry.aiSummary = result.summary
-            if !entry.hasDue, let due = result.due, due.date > .now {
+            if !entry.hasDue, let due = result.due, due.isUpcoming(now: .now) {
                 entry.due = due.date
                 entry.hasTime = due.hasTime
                 entry.hasDue = true
@@ -146,7 +162,7 @@ final class AIWorker {
             entry.aiStatus = .done
         } catch {
             log.error("organize failed: \(error.localizedDescription, privacy: .public)")
-            guard !entry.isDeleted else { return }
+            guard let entry = liveEntry(id) else { return }
             entry.aiStatus = .failed
             entry.aiError = error.localizedDescription
         }
@@ -173,18 +189,19 @@ final class AIWorker {
     }
 
     private func sendReply(_ entry: Entry) async {
-        guard isEnabled, !entry.isDeleted, entry.awaitingReply, !replying.contains(entry.id) else { return }
+        let id = entry.id
+        guard isEnabled, liveEntry(id) != nil, entry.awaitingReply, !replying.contains(id) else { return }
         guard let credentials = credentials() else {
             log.error("reply skipped: no API key")
             entry.replyError = AIError.missingKey.localizedDescription
             try? context.save()
             return
         }
-        replying.insert(entry.id)
-        defer { replying.remove(entry.id) }
+        replying.insert(id)
+        defer { replying.remove(id) }
         entry.replyError = ""
 
-        let conversation = Conversation.Context(title: entry.title, category: entry.category ?? .other, text: entry.text, summary: entry.aiSummary)
+        let conversation = Conversation.Context(title: entry.title, category: entry.category ?? .other, text: entry.fullText, summary: entry.aiSummary)
         let history = entry.sortedMessages.map { ChatTurn($0.role, $0.text) }
         do {
             let reply = try await withBackgroundTime {
@@ -192,12 +209,12 @@ final class AIWorker {
                     try await Conversation.reply(context: conversation, history: history, provider: credentials.provider, apiKey: credentials.key)
                 }
             }
-            guard !entry.isDeleted else { return }
+            guard let entry = liveEntry(id) else { return }
             log.notice("reply done: \(reply.count) characters")
             EntryActions.addMessage(to: entry, role: .assistant, kind: .chat, text: reply, in: context)
         } catch {
             log.error("reply failed: \(error.localizedDescription, privacy: .public)")
-            guard !entry.isDeleted else { return }
+            guard let entry = liveEntry(id) else { return }
             entry.replyError = error.localizedDescription
         }
         EntryActions.save(context)
@@ -205,7 +222,7 @@ final class AIWorker {
 
     // MARK: Beta
 
-    /// 想法放了一段时间没动，AI 抛一个新问题。每次最多两条，避免一下子用掉太多额度。
+    /// 想法放了一段时间没动、也没有待回答的问题时，AI 抛一个新问题。每次最多两条，避免一下子用掉太多额度。
     func waterIdeas() async {
         guard isEnabled, Preferences.betaIdeas, let credentials = credentials() else { return }
         let now = Date.now
@@ -215,15 +232,16 @@ final class AIWorker {
                 && entry.pendingQuestion == nil && !entry.awaitingReply
                 && max(entry.lastActivityAt ?? entry.createdAt, entry.wateredAt ?? .distantPast) < cutoff
         }
-        for entry in ideas.prefix(2) {
-            entry.wateredAt = now
-            let conversation = Conversation.Context(title: entry.title, category: .idea, text: entry.text, summary: entry.aiSummary)
-            let history = entry.sortedMessages.map { ChatTurn($0.role, $0.text) }
+        for idea in ideas.prefix(2) {
+            let id = idea.id
+            idea.wateredAt = now
+            let conversation = Conversation.Context(title: idea.title, category: .idea, text: idea.fullText, summary: idea.aiSummary)
+            let history = idea.sortedMessages.map { ChatTurn($0.role, $0.text) }
             do {
                 let question = try await withBackgroundTime {
                     try await Watering.question(context: conversation, history: history, provider: credentials.provider, apiKey: credentials.key)
                 }
-                if !entry.isDeleted {
+                if let entry = liveEntry(id) {
                     EntryActions.addMessage(to: entry, role: .assistant, kind: .water, text: question, in: context)
                 }
             } catch {
@@ -239,10 +257,12 @@ final class AIWorker {
         guard isEnabled, Preferences.betaIdeas else { return nil }
         if !force, let last = Preferences.lastWanderAt, last > .now.addingTimeInterval(-7 * 24 * 3600) { return nil }
         guard let credentials = credentials() else { return AIError.missingKey.localizedDescription }
+        // 请求前把需要的内容取出来，等待期间想法被删掉也不会读到失效的对象。
         let ideas = ((try? context.fetch(FetchDescriptor<Entry>())) ?? [])
             .filter { $0.category == .idea && $0.state != .dropped }
             .sorted { $0.updatedAt > $1.updatedAt }
             .prefix(12)
+            .map { Wanderer.Idea(id: $0.id, title: $0.title, summary: $0.aiSummary) }
         guard ideas.count >= 3 else { return force ? "至少要有 3 个想法才能漫游。" : nil }
 
         wandering = true
@@ -251,9 +271,7 @@ final class AIWorker {
         do {
             let link = try await withBackgroundTime {
                 try await withRetries {
-                    try await Wanderer.wander(
-                        ideas: ideas.map { Wanderer.Idea(id: $0.id, title: $0.title, summary: $0.aiSummary) },
-                        provider: credentials.provider, apiKey: credentials.key)
+                    try await Wanderer.wander(ideas: Array(ideas), provider: credentials.provider, apiKey: credentials.key)
                 }
             }
             let titles = link.sourceIDs.compactMap { id in ideas.first { $0.id == id }?.title }

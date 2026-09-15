@@ -45,7 +45,7 @@ struct RefineFlowView: View {
             }
         }
         .onAppear {
-            if queue.isEmpty { queue = rough }
+            if queue.isEmpty { queue = rough.filter { $0.urgency != .archive } }
         }
         .onDisappear {
             EntryActions.save(context)

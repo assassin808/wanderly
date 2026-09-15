@@ -82,7 +82,8 @@ struct EntryConversation: View {
         ScrollViewReader { proxy in
             List {
                 Section {
-                    TextField("标题", text: titleBinding, axis: .vertical)
+                    // 标题为空时占位显示原文第一行；绑定 aiTitle 本身，删空时不会被第一行填回来。
+                    TextField(entry.firstLine, text: titleBinding, axis: .vertical)
                         .font(.title3.weight(.semibold))
                     Picker("紧急程度", selection: urgencyBinding) {
                         ForEach(Urgency.allCases) { option in
@@ -115,6 +116,22 @@ struct EntryConversation: View {
                                     .lineLimit(2)
                             }
                         }
+                    }
+                }
+
+                // 旧版本把补充内容存在 details 和 nextStep 里，有内容才显示，AI 和导出也会带上。
+                if !entry.details.isEmpty || !entry.nextStep.isEmpty {
+                    Section {
+                        if !entry.details.isEmpty {
+                            TextField("细节", text: $entry.details, axis: .vertical)
+                                .lineLimit(1...12)
+                        }
+                        if !entry.nextStep.isEmpty {
+                            TextField("下一步", text: $entry.nextStep, axis: .vertical)
+                                .lineLimit(1...4)
+                        }
+                    } header: {
+                        Text("之前记的细节")
                     }
                 }
 
@@ -224,7 +241,7 @@ struct EntryConversation: View {
 
     private var titleBinding: Binding<String> {
         Binding {
-            entry.title
+            entry.aiTitle
         } set: { value in
             entry.aiTitle = value
             entry.touch()

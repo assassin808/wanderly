@@ -10,6 +10,13 @@ public struct DetectedDue: Equatable, Sendable {
     }
 }
 
+extension DetectedDue {
+    /// 还没过：有具体时间的看时刻，只有日期的看是不是今天或以后（只有日期时是当天 0 点）。
+    public func isUpcoming(now: Date, calendar: Calendar = .current) -> Bool {
+        hasTime ? date > now : date >= calendar.startOfDay(for: now)
+    }
+}
+
 /// 从速记原文里识别截止时间，例如「周五下午三点」「明天」「9月20日」「下周一 10:30」「tomorrow 3pm」。
 public enum DueParser {
     public static func parse(_ text: String, now: Date, calendar: Calendar = .current) -> DetectedDue? {

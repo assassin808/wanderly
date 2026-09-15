@@ -50,6 +50,13 @@ struct DueParserTests {
         #expect(parse("明天9:00am站会") == DetectedDue(date: d(2026, 9, 15, 9), hasTime: true))
     }
 
+    @Test func upcomingIncludesDateOnlyToday() {
+        #expect(DetectedDue(date: d(2026, 9, 14), hasTime: false).isUpcoming(now: now, calendar: cal))
+        #expect(!DetectedDue(date: d(2026, 9, 13), hasTime: false).isUpcoming(now: now, calendar: cal))
+        #expect(!DetectedDue(date: d(2026, 9, 14, 9), hasTime: true).isUpcoming(now: now, calendar: cal))
+        #expect(DetectedDue(date: d(2026, 9, 14, 11), hasTime: true).isUpcoming(now: now, calendar: cal))
+    }
+
     @Test func nothingToDetect() {
         #expect(parse("买咖啡豆") == nil)
         #expect(parse("idea：让 agent 自己写 eval") == nil)

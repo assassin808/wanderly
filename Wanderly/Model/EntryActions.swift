@@ -87,7 +87,7 @@ extension Entry {
     var markdown: String {
         MarkdownExport.entry(
             title: title, category: category, urgency: urgency, due: dueLabel,
-            text: text, summary: aiSummary,
+            text: text, details: details, nextStep: nextStep, summary: aiSummary,
             messages: sortedMessages.map { MarkdownExport.Message(role: $0.role, text: $0.text) })
     }
 }

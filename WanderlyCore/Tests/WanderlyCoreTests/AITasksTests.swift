@@ -118,6 +118,12 @@ struct MarkdownExportTests {
         """)
     }
 
+    @Test func includesDetailsFromEarlierVersions() {
+        let markdown = MarkdownExport.entry(title: "组会", category: .meeting, urgency: .urgent, due: nil, text: "开组会",
+                                            details: "带上 radar plot", nextStep: "中午前导出图", summary: "", messages: [])
+        #expect(markdown.contains("## 原文\n\n开组会\n\n## 细节\n\n带上 radar plot\n\n## 下一步\n\n中午前导出图\n"))
+    }
+
     @Test func skipsEmptySections() {
         let markdown = MarkdownExport.entry(title: "t", category: nil, urgency: .urgent, due: "明天", text: "x", summary: "", messages: [])
         #expect(markdown == "# t\n\n- 紧急程度：紧急\n- 截止：明天\n\n## 原文\n\nx\n")

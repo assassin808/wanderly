@@ -9,7 +9,8 @@ struct RootView: View {
     @State private var editing: Entry?
     @State private var showSettings = false
 
-    private var roughCount: Int { entries.filter { $0.state == .rough }.count }
+    /// 只记录的不催，不算进待完善。
+    private var roughCount: Int { entries.filter { $0.state == .rough && $0.urgency != .archive }.count }
 
     var body: some View {
         @Bindable var router = router

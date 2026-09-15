@@ -116,6 +116,17 @@ struct ReminderPlannerTests {
         #expect(!plan([answered]).contains { $0.kind == .water })
     }
 
+    @Test func waterPromptIsNotRepeatedAfterItFired() {
+        let entry = EntrySnapshot(title: "想法", state: .open, urgency: .later, hasDue: false, createdAt: d(2026, 9, 10),
+                                  prompt: "新问题", promptAt: d(2026, 9, 14, 9))
+        // 20:00 已经提醒过；之后重排不应该再排到明天晚上。
+        #expect(!plan([entry], now: d(2026, 9, 14, 21)).contains { $0.kind == .water })
+
+        var late = entry
+        late.promptAt = d(2026, 9, 14, 20, 30)
+        #expect(plan([late], now: d(2026, 9, 14, 21)).first { $0.kind == .water }?.fireDate == d(2026, 9, 15, 20))
+    }
+
     // MARK: 有截止日期的事
 
     @Test func timedEntryFiresAtTimeThenAsksLater() {

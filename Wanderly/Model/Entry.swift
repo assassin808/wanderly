@@ -109,11 +109,19 @@ final class Entry {
         sortedMessages.last?.role == .user
     }
 
-    /// 末尾连续几条 AI 消息里的第一条，也就是还没回答的问题。
+    /// 还没回答的 AI 追问或浇水问题：末尾连续几条 AI 消息里最早的一条问题。普通的 AI 回复不算。
     var pendingQuestion: ChatMessage? {
         let list = sortedMessages
         guard list.last?.role == .assistant else { return nil }
-        return list.reversed().prefix { $0.role == .assistant }.last
+        return list.reversed().prefix { $0.role == .assistant }.last { $0.kind != .chat }
+    }
+
+    /// 给 AI 看的完整内容：原文，加上旧版本留下的细节和下一步。
+    var fullText: String {
+        var parts = [text]
+        if !details.trimmed.isEmpty { parts.append("细节：\(details.trimmed)") }
+        if !nextStep.trimmed.isEmpty { parts.append("下一步：\(nextStep.trimmed)") }
+        return parts.joined(separator: "\n\n")
     }
 
     var dueLabel: String? {
