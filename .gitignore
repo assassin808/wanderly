@@ -7,6 +7,7 @@ dist/
 # Xcode（工程由 project.yml 通过 xcodegen 生成）
 Wanderly.xcodeproj/
 Wanderly/Info.plist
+Config/Secrets.xcconfig
 build/
 DerivedData/
 xcuserdata/

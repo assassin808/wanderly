@@ -61,7 +61,9 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         let snapshots = ((try? context.fetch(FetchDescriptor<Entry>())) ?? []).map(\.snapshot)
         let now = Date.now
 
-        center.removeAllPendingNotificationRequests()
+        // 只清掉自己排的提醒，不动还没弹出的测试通知。
+        let planned = await center.pendingNotificationRequests().map(\.identifier).filter { !$0.hasPrefix("test-") }
+        center.removePendingNotificationRequests(withIdentifiers: planned)
         let closedIDs = snapshots.filter { !$0.state.isActive }.flatMap { ["due-\($0.id.uuidString)", "check-\($0.id.uuidString)"] }
         center.removeDeliveredNotifications(withIdentifiers: closedIDs)
 
@@ -103,6 +105,17 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: item.fireDate)
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         return UNNotificationRequest(identifier: item.id, content: content, trigger: trigger)
+    }
+
+    /// 已经排好、还没发出的提醒，按时间排序。
+    func upcoming(limit: Int = 6) async -> [UpcomingReminder] {
+        let requests = await center.pendingNotificationRequests()
+        let items = requests.compactMap { request -> UpcomingReminder? in
+            guard let trigger = request.trigger as? UNCalendarNotificationTrigger,
+                  let date = trigger.nextTriggerDate() else { return nil }
+            return UpcomingReminder(id: request.identifier, title: request.content.title, body: request.content.body, date: date)
+        }
+        return Array(items.sorted { $0.date < $1.date }.prefix(limit))
     }
 
     // MARK: UNUserNotificationCenterDelegate

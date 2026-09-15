@@ -21,6 +21,7 @@ struct CaptureBar: View {
             HStack(spacing: 8) {
                 TextField("记一件事…", text: $text)
                     .focused($focused)
+                    .accessibilityIdentifier("captureField")
                     .submitLabel(.done)
                     .onSubmit(save)
                 Button(action: save) {

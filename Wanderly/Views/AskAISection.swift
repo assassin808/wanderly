@@ -4,6 +4,7 @@ import WanderlyCore
 /// AI 只提问，回答由用户自己写，写完追加到「细节」里。
 struct AskAISection: View {
     @Bindable var entry: Entry
+    @AppStorage(Preferences.Key.aiProvider) private var provider: AIProvider = .gemini
     @State private var questions: [String] = []
     @State private var answers: [String] = []
     @State private var loading = false
@@ -24,6 +25,7 @@ struct AskAISection: View {
                     }
                 }
                 .disabled(loading)
+                .accessibilityIdentifier("askAIButton")
             } else {
                 ForEach(questions.indices, id: \.self) { index in
                     VStack(alignment: .leading, spacing: 6) {
@@ -54,8 +56,8 @@ struct AskAISection: View {
     }
 
     private func ask() async {
-        guard let apiKey = APIKeyStore.load(), !apiKey.isEmpty else {
-            errorMessage = "先在设置里填 Claude API Key。"
+        guard let apiKey = APIKeyStore.effectiveKey(for: provider) else {
+            errorMessage = "先在设置里填 \(provider.displayName) API Key。"
             return
         }
         loading = true
@@ -67,7 +69,7 @@ struct AskAISection: View {
                 nextStep: entry.nextStep,
                 due: DueText.describe(due: entry.due, hasTime: entry.hasTime, now: .now),
                 today: Date.now.formatted(date: .complete, time: .omitted))
-            let result = try await ClaudeRefiner.askQuestions(apiKey: apiKey, input: input)
+            let result = try await Refiner.askQuestions(provider: provider, apiKey: apiKey, input: input)
             questions = result
             answers = Array(repeating: "", count: result.count)
             errorMessage = nil

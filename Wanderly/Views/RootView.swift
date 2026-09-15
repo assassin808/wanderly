@@ -25,6 +25,7 @@ struct RootView: View {
                             Text(roughCount > 0 ? "完善 \(roughCount)" : "完善")
                         }
                         .disabled(roughCount == 0)
+                        .accessibilityIdentifier("refineButton")
                     }
                     #if os(iOS)
                     ToolbarItem(placement: .topBarLeading) {
@@ -33,6 +34,7 @@ struct RootView: View {
                         } label: {
                             Label("设置", systemImage: "gearshape")
                         }
+                        .accessibilityIdentifier("settingsButton")
                     }
                     #endif
                 }
@@ -66,7 +68,7 @@ struct RootView: View {
             if phase != .inactive { Reminders.shared.scheduleSoon() }
         }
         .task {
-            if !Persistence.isDemo {
+            if !ProcessInfo.processInfo.arguments.contains("-skipNotificationPrompt") {
                 await Reminders.shared.requestAuthorizationIfNeeded()
             }
             Reminders.shared.scheduleSoon()

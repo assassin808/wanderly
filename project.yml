@@ -23,6 +23,9 @@ targets:
     deploymentTarget:
       iOS: "18.0"
       macOS: "15.0"
+    configFiles:
+      Debug: Config/Wanderly.xcconfig
+      Release: Config/Wanderly.xcconfig
     sources:
       - path: Wanderly
     dependencies:
@@ -35,6 +38,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.productivity
         ITSAppUsesNonExemptEncryption: false
+        GeminiAPIKey: $(GEMINI_API_KEY)
         UILaunchScreen: {}
         UIBackgroundModes: [remote-notification]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
@@ -53,3 +57,21 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: Wanderly/Wanderly.entitlements
         "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Wanderly/Wanderly-macOS.entitlements
+    scheme:
+      testTargets:
+        - WanderlyUITests
+  WanderlyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: WanderlyUITests
+    dependencies:
+      - target: Wanderly
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.assassin808.wanderly.uitests
+        TEST_TARGET_NAME: Wanderly
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated

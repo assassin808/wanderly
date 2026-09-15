@@ -9,6 +9,7 @@ enum Preferences {
         static let eveningMinute = "eveningMinute"
         static let reviewWeekday = "reviewWeekday"
         static let checkDelayMinutes = "checkDelayMinutes"
+        static let aiProvider = "aiProvider"
     }
 
     private static let registered: Void = {

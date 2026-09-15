@@ -8,10 +8,17 @@ struct SettingsView: View {
     @AppStorage(Preferences.Key.eveningMinute) private var eveningMinute = ReminderSettings.default.eveningMinute
     @AppStorage(Preferences.Key.reviewWeekday) private var reviewWeekday = ReminderSettings.default.reviewWeekday
     @AppStorage(Preferences.Key.checkDelayMinutes) private var checkDelayMinutes = ReminderSettings.default.checkDelayMinutes
-    @State private var apiKey = APIKeyStore.load() ?? ""
+    @AppStorage(Preferences.Key.aiProvider) private var provider: AIProvider = .gemini
+    @State private var apiKey = ""
     @State private var notificationsDenied = false
+    @State private var upcoming: [UpcomingReminder] = []
 
     private let weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+
+    /// 任一提醒设置变化都会重排并刷新列表。
+    private var reminderSignature: [Int] {
+        [remindersOn ? 1 : 0, morningMinute, eveningMinute, reviewWeekday, checkDelayMinutes]
+    }
 
     var body: some View {
         Form {
@@ -27,6 +34,29 @@ struct SettingsView: View {
                 }
             } footer: {
                 Text("iPhone 和 Mac 都开着的话会各响一次，可以只留一台。")
+            }
+
+            Section("接下来的提醒") {
+                if upcoming.isEmpty {
+                    Text(remindersOn ? "还没有排好的提醒" : "这台设备的提醒已关闭")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(upcoming) { item in
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title)
+                                Text(item.body)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            Spacer()
+                            Text(DueText.describe(due: item.date, hasTime: true, now: .now))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
 
             Section("提醒时间") {
@@ -47,26 +77,44 @@ struct SettingsView: View {
             }
 
             Section {
-                SecureField("Claude API Key", text: $apiKey)
-                    .onChange(of: apiKey) { _, key in APIKeyStore.save(key) }
-                Link("在 Anthropic Console 创建 Key", destination: URL(string: "https://console.anthropic.com/settings/keys")!)
+                Picker("服务", selection: $provider) {
+                    ForEach(AIProvider.allCases) { option in
+                        Text(option.displayName).tag(option)
+                    }
+                }
+                SecureField("\(provider.displayName) API Key", text: $apiKey)
+                switch provider {
+                case .gemini:
+                    Link("在 Google AI Studio 创建 Key", destination: URL(string: "https://aistudio.google.com/apikey")!)
+                case .claude:
+                    Link("在 Anthropic Console 创建 Key", destination: URL(string: "https://console.anthropic.com/settings/keys")!)
+                }
             } header: {
                 Text("AI 追问")
             } footer: {
-                Text("Key 保存在钥匙串里，只在你自己的设备间通过 iCloud 钥匙串同步。")
+                Text(keyFooter)
             }
         }
         .formStyle(.grouped)
-        .onChange(of: [morningMinute, eveningMinute, reviewWeekday, checkDelayMinutes]) {
-            Reminders.shared.scheduleSoon()
-        }
-        .onChange(of: remindersOn) {
-            Reminders.shared.scheduleSoon()
-        }
-        .task {
+        .task(id: reminderSignature) {
+            await Reminders.shared.reschedule()
+            upcoming = await Reminders.shared.upcoming()
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             notificationsDenied = settings.authorizationStatus == .denied
         }
+        .task(id: provider) {
+            apiKey = APIKeyStore.load(for: provider) ?? ""
+        }
+        .onChange(of: apiKey) { _, key in
+            APIKeyStore.save(key, for: provider)
+        }
+    }
+
+    private var keyFooter: String {
+        if provider == .gemini, apiKey.isEmpty, APIKeyStore.bundledGeminiKey != nil {
+            return "没填时使用编译时内置的 Gemini Key。"
+        }
+        return "Key 保存在钥匙串里，只在你自己的设备间通过 iCloud 钥匙串同步。"
     }
 
     private func minutes(_ value: Binding<Int>) -> Binding<Date> {

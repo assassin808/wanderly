@@ -65,6 +65,7 @@ struct EntryListView: View {
                 }
             }
         }
+        .scrollDismissesKeyboard(.immediately)
     }
 
     private func row(_ entry: Entry, now: Date) -> some View {
@@ -135,6 +136,7 @@ struct EntryRow: View {
                     .foregroundStyle(active ? Color.secondary : Color.green)
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel(active ? "完成：\(entry.title)" : "恢复：\(entry.title)")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.title)
