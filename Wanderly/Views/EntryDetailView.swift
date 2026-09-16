@@ -15,48 +15,27 @@ struct EntryDetailView: View {
                 .navigationTitle(entry.category?.label ?? "记录")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            ShareLink(item: entry.markdown, preview: SharePreview(entry.title)) {
-                                Label("导出为 Markdown", systemImage: "square.and.arrow.up")
-                            }
-                            if entry.state == .rough {
-                                Button("完善好了", systemImage: "checkmark.seal") {
-                                    EntryActions.set(entry, to: .open, in: context)
-                                }
-                            }
-                            if entry.state.isActive {
-                                Button("完成", systemImage: "checkmark") {
-                                    EntryActions.set(entry, to: .done, in: context)
-                                    dismiss()
-                                }
-                                Button(entry.hasDue ? "推迟到明天" : "明天再提醒", systemImage: "moon") {
-                                    EntryActions.snooze(entry, in: context)
-                                }
-                                Button("放弃", systemImage: "xmark") {
-                                    EntryActions.set(entry, to: .dropped, in: context)
-                                    dismiss()
-                                }
-                            } else {
-                                Button("恢复", systemImage: "arrow.uturn.backward") {
-                                    EntryActions.set(entry, to: .open, in: context)
-                                }
-                            }
-                            Button("删除", systemImage: "trash", role: .destructive) {
-                                deleteOnClose = true
-                                dismiss()
-                            }
-                        } label: {
-                            Label("更多", systemImage: "ellipsis.circle")
-                        }
-                        .accessibilityIdentifier("entryMenu")
+                        actionsMenu
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("好") { dismiss() }
                     }
                 }
+                #else
+                // macOS 弹窗底部每个位置只显示一个按钮，多的会被丢掉，所以这一排自己画。
+                .safeAreaInset(edge: .bottom) {
+                    HStack {
+                        actionsMenu
+                        Spacer()
+                        Button("好") { dismiss() }
+                            .keyboardShortcut(.defaultAction)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 10)
+                }
+                #endif
         }
         // macOS 的弹出窗口按内容自适应，列表没有固定高度会被压成一条缝，所以给个最小尺寸。
         #if os(macOS)
@@ -69,6 +48,43 @@ struct EntryDetailView: View {
                 EntryActions.save(context)
             }
         }
+    }
+
+    private var actionsMenu: some View {
+        Menu {
+            ShareLink(item: entry.markdown, preview: SharePreview(entry.title)) {
+                Label("导出为 Markdown", systemImage: "square.and.arrow.up")
+            }
+            if entry.state == .rough {
+                Button("完善好了", systemImage: "checkmark.seal") {
+                    EntryActions.set(entry, to: .open, in: context)
+                }
+            }
+            if entry.state.isActive {
+                Button("完成", systemImage: "checkmark") {
+                    EntryActions.set(entry, to: .done, in: context)
+                    dismiss()
+                }
+                Button(entry.hasDue ? "推迟到明天" : "明天再提醒", systemImage: "moon") {
+                    EntryActions.snooze(entry, in: context)
+                }
+                Button("放弃", systemImage: "xmark") {
+                    EntryActions.set(entry, to: .dropped, in: context)
+                    dismiss()
+                }
+            } else {
+                Button("恢复", systemImage: "arrow.uturn.backward") {
+                    EntryActions.set(entry, to: .open, in: context)
+                }
+            }
+            Button("删除", systemImage: "trash", role: .destructive) {
+                deleteOnClose = true
+                dismiss()
+            }
+        } label: {
+            Label("更多", systemImage: "ellipsis.circle")
+        }
+        .accessibilityIdentifier("entryMenu")
     }
 }
 

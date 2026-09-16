@@ -26,7 +26,6 @@ struct RefineFlowView: View {
             .navigationTitle(index < queue.count ? "完善 \(index + 1) / \(queue.count)" : "完善")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭") { dismiss() }
@@ -36,13 +35,26 @@ struct RefineFlowView: View {
                         Button("跳过", action: next)
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("完善好了") {
-                            EntryActions.set(queue[index], to: .open, in: context)
-                            next()
-                        }
+                        Button("完善好了", action: markRefined)
                     }
                 }
             }
+            #else
+            // macOS 弹窗底部每个位置只显示一个按钮，多的会被丢掉，所以这一排自己画。
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Button("关闭") { dismiss() }
+                    Spacer()
+                    if index < queue.count {
+                        Button("跳过", action: next)
+                        Button("完善好了", action: markRefined)
+                            .keyboardShortcut(.defaultAction)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+            }
+            #endif
         }
         #if os(macOS)
         .frame(minWidth: 560, idealWidth: 620, minHeight: 620, idealHeight: 720)
@@ -53,6 +65,12 @@ struct RefineFlowView: View {
         .onDisappear {
             EntryActions.save(context)
         }
+    }
+
+    private func markRefined() {
+        guard index < queue.count else { return }
+        EntryActions.set(queue[index], to: .open, in: context)
+        next()
     }
 
     private func next() {
