@@ -92,6 +92,12 @@ struct RootView: View {
             #if DEBUG && os(iOS)
             WidgetPreviewRenderer.runIfRequested()
             #endif
+            #if DEBUG
+            // 调试用：Mac 上没法用脚本点开一条记录，用这个参数直接打开第一条。
+            if ProcessInfo.processInfo.arguments.contains("-openEntry") {
+                editing = entries.first { $0.state.isActive }
+            }
+            #endif
             await AppRefresh.run()
         }
     }

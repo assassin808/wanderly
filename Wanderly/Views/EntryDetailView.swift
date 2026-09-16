@@ -58,6 +58,10 @@ struct EntryDetailView: View {
                     }
                 }
         }
+        // macOS 的弹出窗口按内容自适应，列表没有固定高度会被压成一条缝，所以给个最小尺寸。
+        #if os(macOS)
+        .frame(minWidth: 560, idealWidth: 620, minHeight: 620, idealHeight: 720)
+        #endif
         .onDisappear {
             if deleteOnClose {
                 EntryActions.delete(entry, in: context)

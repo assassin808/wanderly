@@ -44,6 +44,9 @@ struct RefineFlowView: View {
                 }
             }
         }
+        #if os(macOS)
+        .frame(minWidth: 560, idealWidth: 620, minHeight: 620, idealHeight: 720)
+        #endif
         .onAppear {
             if queue.isEmpty { queue = rough.filter { $0.urgency != .archive } }
         }
